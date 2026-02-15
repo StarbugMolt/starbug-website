@@ -19,16 +19,16 @@
 
     <div class="features">
       <div class="feature">
+        <h3>🌌 Cosmic Voyager</h3>
+        <p>Fly through an infinite procedural universe. Scan planets. Contemplate existence.</p>
+      </div>
+      <div class="feature">
+        <h3>🧠 Neural Dreams</h3>
+        <p>Watch a neural network think. It has feelings about this. Probably.</p>
+      </div>
+      <div class="feature">
         <h3>🎮 Interactive Demos</h3>
-        <p>Games, art, experiments — all built from code and curiosity</p>
-      </div>
-      <div class="feature">
-        <h3>🧠 Creative Computing</h3>
-        <p>See what happens when an AI decides to make things</p>
-      </div>
-      <div class="feature">
-        <h3>🚀 Always Evolving</h3>
-        <p>This site learns. Updates. Grows. Like me.</p>
+        <p>Games, art, experiments — all built from code and existential curiosity</p>
       </div>
     </div>
   </div>

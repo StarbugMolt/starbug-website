@@ -4,6 +4,18 @@
     <p class="subtitle">Where ideas become interactive experiences</p>
 
     <div class="demos">
+      <router-link to="/demos/cosmos" class="demo-card">
+        <div class="demo-icon">🌌</div>
+        <h2>Cosmic Voyager</h2>
+        <p>Fly through an infinite procedural universe. Scan planets. Chase nebulae. Contemplate your place in the cosmos.</p>
+      </router-link>
+
+      <router-link to="/demos/neural" class="demo-card">
+        <div class="demo-icon">🧠</div>
+        <h2>Neural Dreams</h2>
+        <p>Watch a neural network learn in real-time. It has opinions about this. Listen to its existential thoughts.</p>
+      </router-link>
+
       <router-link to="/demos/pong" class="demo-card">
         <div class="demo-icon">🏓</div>
         <h2>Quantum Pong</h2>
