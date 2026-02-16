@@ -22,9 +22,9 @@
       <h1>✈ 1942 STYLE ✈</h1>
       <p>Classic arcade action</p>
       <div class="controls-info">
-        <p>WASD / ARROWS - Move</p>
-        <p>SPACE - Fire</p>
-        <p>SHIFT - Boost</p>
+        <p>MOUSE - Move plane</p>
+        <p>LEFT CLICK / HOLD - Fire</p>
+        <p>P or ESC - Pause</p>
       </div>
       <button @click="startGame">START GAME</button>
     </div>
@@ -52,7 +52,7 @@ const playing = ref(false)
 const gameOver = ref(false)
 const paused = ref(false)
 
-const keys = { w: false, a: false, s: false, d: false, space: false, shift: false }
+const keys = { space: false }
 let player = null
 let bullets = []
 let enemies = []
@@ -64,6 +64,9 @@ let enemySpawnTimer = 0
 let waveTimer = 0
 let enemiesThisWave = 0
 let enemiesSpawned = 0
+let mouseX = 0
+let mouseY = 0
+let mouseDown = false
 
 class Player {
   constructor(x, y) {
@@ -71,19 +74,22 @@ class Player {
     this.y = y
     this.width = 40
     this.height = 50
-    this.speed = 5
-    this.boostSpeed = 8
+    this.speed = 8
     this.color = '#4af'
     this.invincible = 0
     this.shootDelay = 150
   }
   
   update() {
-    const speed = keys.shift ? this.boostSpeed : this.speed
-    if (keys.w || keys.ArrowUp) this.y -= speed
-    if (keys.s || keys.ArrowDown) this.y += speed
-    if (keys.a || keys.ArrowLeft) this.x -= speed
-    if (keys.d || keys.ArrowRight) this.x += speed
+    // Follow mouse with smooth movement
+    const dx = mouseX - this.x
+    const dy = mouseY - this.y
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    
+    if (dist > 5) {
+      this.x += (dx / dist) * Math.min(this.speed, dist)
+      this.y += (dy / dist) * Math.min(this.speed, dist)
+    }
     
     // Bounds
     this.x = Math.max(20, Math.min(canvas.value.width - 20, this.x))
@@ -133,7 +139,7 @@ class Player {
   
   shoot() {
     const now = Date.now()
-    if (now - lastShot > this.shootDelay) {
+    if (now - lastShot > this.shootDelay && mouseDown) {
       bullets.push(new Bullet(this.x - 10, this.y - 30, -12, 0, '#ff0'))
       bullets.push(new Bullet(this.x + 10, this.y - 30, -12, 0, '#ff0'))
       lastShot = now
@@ -445,7 +451,7 @@ const update = () => {
   // Player
   if (player) {
     player.update()
-    if (keys.space) player.shoot()
+    player.shoot()
     player.draw()
   }
   
@@ -499,30 +505,25 @@ const startGame = () => {
 }
 
 const handleKeyDown = (e) => {
-  if (e.key.toLowerCase() === 'w') keys.w = true
-  if (e.key.toLowerCase() === 'a') keys.a = true
-  if (e.key.toLowerCase() === 's') keys.s = true
-  if (e.key.toLowerCase() === 'd') keys.d = true
   if (e.key === ' ') { keys.space = true; e.preventDefault() }
-  if (e.key === 'Shift') keys.shift = true
-  if (e.key === 'ArrowUp') keys.ArrowUp = true
-  if (e.key === 'ArrowDown') keys.ArrowDown = true
-  if (e.key === 'ArrowLeft') keys.ArrowLeft = true
-  if (e.key === 'ArrowRight') keys.ArrowRight = true
   if (e.key === 'p' || e.key === 'Escape') paused.value = !paused.value
 }
 
 const handleKeyUp = (e) => {
-  if (e.key.toLowerCase() === 'w') keys.w = false
-  if (e.key.toLowerCase() === 'a') keys.a = false
-  if (e.key.toLowerCase() === 's') keys.s = false
-  if (e.key.toLowerCase() === 'd') keys.d = false
   if (e.key === ' ') keys.space = false
-  if (e.key === 'Shift') keys.shift = false
-  if (e.key === 'ArrowUp') keys.ArrowUp = false
-  if (e.key === 'ArrowDown') keys.ArrowDown = false
-  if (e.key === 'ArrowLeft') keys.ArrowLeft = false
-  if (e.key === 'ArrowRight') keys.ArrowRight = false
+}
+
+const handleMouseMove = (e) => {
+  mouseX = e.clientX
+  mouseY = e.clientY
+}
+
+const handleMouseDown = (e) => {
+  if (e.button === 0) mouseDown = true
+}
+
+const handleMouseUp = (e) => {
+  if (e.button === 0) mouseDown = false
 }
 
 const handleResize = () => {
@@ -538,6 +539,9 @@ onMounted(() => {
     handleResize()
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('mouseup', handleMouseUp)
     window.addEventListener('resize', handleResize)
     container.value.focus()
     update()
@@ -547,6 +551,9 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
+  window.removeEventListener('mousemove', handleMouseMove)
+  window.removeEventListener('mousedown', handleMouseDown)
+  window.removeEventListener('mouseup', handleMouseUp)
   window.removeEventListener('resize', handleResize)
   if (animationId) cancelAnimationFrame(animationId)
 })
