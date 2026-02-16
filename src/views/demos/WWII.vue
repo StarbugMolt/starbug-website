@@ -475,6 +475,9 @@ class Particle {
   }
   
   draw() {
+    const size = Math.max(0, this.size * this.life)
+    if (size <= 0) return
+    
     ctx.globalAlpha = this.life
     
     // Glow
@@ -483,13 +486,13 @@ class Particle {
     
     ctx.fillStyle = this.color
     ctx.beginPath()
-    ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2)
+    ctx.arc(this.x, this.y, size, 0, Math.PI * 2)
     ctx.fill()
     
     // Bright core
     ctx.fillStyle = '#fff'
     ctx.beginPath()
-    ctx.arc(this.x, this.y, this.size * this.life * 0.3, 0, Math.PI * 2)
+    ctx.arc(this.x, this.y, size * 0.3, 0, Math.PI * 2)
     ctx.fill()
     
     ctx.shadowBlur = 0
