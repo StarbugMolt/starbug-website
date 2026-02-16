@@ -105,34 +105,89 @@ class Player {
     ctx.save()
     ctx.translate(this.x, this.y)
     
-    // Wings
-    ctx.fillStyle = '#28a'
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'
     ctx.beginPath()
-    ctx.moveTo(0, -25)
-    ctx.lineTo(-25, 10)
-    ctx.lineTo(-20, 10)
-    ctx.lineTo(-20, 20)
-    ctx.lineTo(20, 20)
-    ctx.lineTo(20, 10)
-    ctx.lineTo(25, 10)
-    ctx.closePath()
+    ctx.ellipse(3, 3, 20, 25, 0, 0, Math.PI * 2)
     ctx.fill()
     
+    // Main wing (bottom)
+    ctx.fillStyle = '#1a5a8a'
+    ctx.fillRect(-28, -5, 56, 12)
+    ctx.fillStyle = '#0d3d5c'
+    ctx.fillRect(-28, -5, 56, 3)
+    
     // Fuselage
-    ctx.fillStyle = this.color
+    ctx.fillStyle = '#2a7ab0'
     ctx.beginPath()
-    ctx.ellipse(0, 0, 10, 30, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, 0, 12, 32, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#1a5a8a'
+    ctx.beginPath()
+    ctx.ellipse(0, 5, 10, 20, 0, 0, Math.PI * 2)
     ctx.fill()
     
     // Cockpit
-    ctx.fillStyle = '#8df'
+    ctx.fillStyle = '#7ec8e3'
     ctx.beginPath()
-    ctx.ellipse(0, -5, 6, 12, 0, 0, Math.PI * 2)
+    ctx.ellipse(0, -8, 8, 10, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#4a90a8'
+    ctx.beginPath()
+    ctx.ellipse(0, -6, 5, 6, 0, 0, Math.PI * 2)
     ctx.fill()
     
-    // Propeller
-    ctx.fillStyle = '#666'
-    ctx.fillRect(-20, -35, 40, 4)
+    // Top wing
+    ctx.fillStyle = '#1a5a8a'
+    ctx.fillRect(-22, -28, 44, 8)
+    ctx.fillStyle = '#0d3d5c'
+    ctx.fillRect(-22, -28, 44, 2)
+    
+    // Engine cowling
+    ctx.fillStyle = '#3a8aba'
+    ctx.beginPath()
+    ctx.ellipse(0, -28, 10, 8, 0, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // Propeller hub
+    ctx.fillStyle = '#222'
+    ctx.beginPath()
+    ctx.arc(0, -34, 4, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // Propeller (animated)
+    const propAngle = Date.now() / 30
+    ctx.fillStyle = '#444'
+    ctx.fillRect(-28, -36, 4, 4)
+    ctx.fillRect(24, -36, 4, 4)
+    ctx.fillRect(-2, -60, 4, 24)
+    
+    // Tail
+    ctx.fillStyle = '#1a5a8a'
+    ctx.beginPath()
+    ctx.moveTo(-15, 25)
+    ctx.lineTo(0, 35)
+    ctx.lineTo(15, 25)
+    ctx.lineTo(0, 28)
+    ctx.closePath()
+    ctx.fill()
+    
+    // Bullet trails
+    if (mouseDown && Date.now() - lastShot < 100) {
+      ctx.fillStyle = 'rgba(255, 200, 50, 0.5)'
+      ctx.fillRect(-3, -40, 6, 15)
+    }
+    
+    // Shield indicator
+    if (this.invincible > 0) {
+      ctx.strokeStyle = '#0ff'
+      ctx.lineWidth = 2
+      ctx.globalAlpha = 0.5 + Math.sin(Date.now() / 100) * 0.3
+      ctx.beginPath()
+      ctx.arc(0, 0, 35, 0, Math.PI * 2)
+      ctx.stroke()
+      ctx.globalAlpha = 1
+    }
     
     ctx.restore()
   }
@@ -140,8 +195,7 @@ class Player {
   shoot() {
     const now = Date.now()
     if (now - lastShot > this.shootDelay && mouseDown) {
-      bullets.push(new Bullet(this.x - 10, this.y - 30, -12, 0, '#ff0'))
-      bullets.push(new Bullet(this.x + 10, this.y - 30, -12, 0, '#ff0'))
+      bullets.push(new Bullet(this.x, this.y - 30, 0, -15, '#ff0'))
       lastShot = now
     }
   }
@@ -165,8 +219,22 @@ class Bullet {
   }
   
   draw() {
+    // Glow effect
+    ctx.shadowBlur = 10
+    ctx.shadowColor = this.color
+    
     ctx.fillStyle = this.color
-    ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height)
+    ctx.beginPath()
+    ctx.ellipse(this.x, this.y, 3, 8, 0, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // Bright core
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.ellipse(this.x, this.y, 1.5, 4, 0, 0, Math.PI * 2)
+    ctx.fill()
+    
+    ctx.shadowBlur = 0
   }
   
   isOffscreen() {
@@ -228,31 +296,123 @@ class Enemy {
     ctx.translate(this.x, this.y)
     
     if (this.type === 'fighter') {
-      ctx.fillStyle = this.color
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'
       ctx.beginPath()
-      ctx.moveTo(0, 20)
-      ctx.lineTo(-15, -15)
-      ctx.lineTo(0, -10)
-      ctx.lineTo(15, -15)
+      ctx.ellipse(3, 3, 15, 18, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Wings
+      ctx.fillStyle = '#8a2a2a'
+      ctx.beginPath()
+      ctx.moveTo(0, 18)
+      ctx.lineTo(-18, -8)
+      ctx.lineTo(-14, -6)
+      ctx.lineTo(-14, 8)
+      ctx.lineTo(14, 8)
+      ctx.lineTo(14, -6)
+      ctx.lineTo(18, -8)
       ctx.closePath()
       ctx.fill()
+      
+      // Fuselage
+      ctx.fillStyle = '#b04040'
+      ctx.beginPath()
+      ctx.ellipse(0, 0, 8, 20, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Cockpit
+      ctx.fillStyle = '#607080'
+      ctx.beginPath()
+      ctx.ellipse(0, -4, 5, 8, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Nose
+      ctx.fillStyle = '#603020'
+      ctx.beginPath()
+      ctx.ellipse(0, -18, 6, 6, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
     } else if (this.type === 'bomber') {
-      ctx.fillStyle = this.color
-      ctx.fillRect(-25, -15, 50, 30)
-      ctx.fillRect(-40, -5, 15, 10)
-      ctx.fillRect(25, -5, 15, 10)
-    } else if (this.type === 'ace') {
-      ctx.fillStyle = this.color
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'
       ctx.beginPath()
-      ctx.moveTo(0, 25)
-      ctx.lineTo(-20, -10)
-      ctx.lineTo(0, -5)
-      ctx.lineTo(20, -10)
+      ctx.ellipse(3, 3, 30, 20, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Wings
+      ctx.fillStyle = '#5a3030'
+      ctx.fillRect(-45, -8, 90, 14)
+      ctx.fillStyle = '#3a2020'
+      ctx.fillRect(-45, -8, 90, 4)
+      
+      // Body
+      ctx.fillStyle = '#705040'
+      ctx.beginPath()
+      ctx.ellipse(0, 0, 18, 25, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Cockpit
+      ctx.fillStyle = '#506070'
+      ctx.beginPath()
+      ctx.ellipse(0, -8, 10, 10, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Engines
+      ctx.fillStyle = '#403020'
+      ctx.beginPath()
+      ctx.arc(-30, 0, 8, 0, Math.PI * 2)
+      ctx.arc(30, 0, 8, 0, Math.PI * 2)
+      ctx.fill()
+      
+    } else if (this.type === 'ace') {
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'
+      ctx.beginPath()
+      ctx.ellipse(3, 3, 18, 20, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Wings (tapered)
+      ctx.fillStyle = '#a02020'
+      ctx.beginPath()
+      ctx.moveTo(0, 22)
+      ctx.lineTo(-20, -5)
+      ctx.lineTo(-15, -3)
+      ctx.lineTo(-15, 12)
+      ctx.lineTo(15, 12)
+      ctx.lineTo(15, -3)
+      ctx.lineTo(20, -5)
       ctx.closePath()
       ctx.fill()
+      
+      // Fuselage
+      ctx.fillStyle = '#c83030'
+      ctx.beginPath()
+      ctx.ellipse(0, 0, 10, 22, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Cockpit
+      ctx.fillStyle = '#708090'
+      ctx.beginPath()
+      ctx.ellipse(0, -6, 6, 9, 0, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Red Baron style - red wings tips
+      ctx.fillStyle = '#ff0000'
+      ctx.fillRect(-20, -5, 5, 8)
+      ctx.fillRect(15, -5, 5, 8)
+      
       // Mustache
-      ctx.fillStyle = '#fff'
-      ctx.fillRect(-8, 5, 16, 3)
+      ctx.fillStyle = '#ffd700'
+      ctx.fillRect(-8, 4, 16, 3)
+    }
+    
+    // Damage flash
+    if (this.hp < 2 && Math.random() > 0.7) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'
+      ctx.beginPath()
+      ctx.arc(0, 0, 25, 0, Math.PI * 2)
+      ctx.fill()
     }
     
     ctx.restore()
@@ -298,23 +458,41 @@ class Particle {
   constructor(x, y, color) {
     this.x = x
     this.y = y
-    this.vx = (Math.random() - 0.5) * 8
-    this.vy = (Math.random() - 0.5) * 8
+    this.vx = (Math.random() - 0.5) * 10
+    this.vy = (Math.random() - 0.5) * 10
     this.life = 1
     this.color = color
-    this.size = Math.random() * 4 + 2
+    this.size = Math.random() * 6 + 3
+    this.decay = Math.random() * 0.02 + 0.02
   }
   
   update() {
     this.x += this.vx
     this.y += this.vy
-    this.life -= 0.03
+    this.vx *= 0.96
+    this.vy *= 0.96
+    this.life -= this.decay
   }
   
   draw() {
     ctx.globalAlpha = this.life
+    
+    // Glow
+    ctx.shadowBlur = 10
+    ctx.shadowColor = this.color
+    
     ctx.fillStyle = this.color
-    ctx.fillRect(this.x, this.y, this.size, this.size)
+    ctx.beginPath()
+    ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2)
+    ctx.fill()
+    
+    // Bright core
+    ctx.fillStyle = '#fff'
+    ctx.beginPath()
+    ctx.arc(this.x, this.y, this.size * this.life * 0.3, 0, Math.PI * 2)
+    ctx.fill()
+    
+    ctx.shadowBlur = 0
     ctx.globalAlpha = 1
   }
 }
@@ -440,13 +618,37 @@ const update = () => {
   ctx.fillStyle = '#001'
   ctx.fillRect(0, 0, canvas.value.width, canvas.value.height)
   
-  // Draw stars background
-  ctx.fillStyle = '#333'
-  for (let i = 0; i < 50; i++) {
-    const sx = (i * 137 + waveTimer) % canvas.value.width
-    const sy = (i * 97 + waveTimer * 2) % canvas.value.height
+  // Clear with sky gradient
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.value.height)
+  gradient.addColorStop(0, '#1a2a4a')
+  gradient.addColorStop(0.5, '#2a3a5a')
+  gradient.addColorStop(1, '#1a2a3a')
+  ctx.fillStyle = gradient
+  ctx.fillRect(0, 0, canvas.value.width, canvas.value.height)
+  
+  // Clouds (parallax)
+  ctx.fillStyle = 'rgba(255,255,255,0.05)'
+  for (let i = 0; i < 8; i++) {
+    const cx = ((i * 200 + waveTimer * 0.5) % (canvas.value.width + 200)) - 100
+    const cy = 100 + i * 80
+    const size = 80 + i * 20
+    ctx.beginPath()
+    ctx.arc(cx, cy, size, 0, Math.PI * 2)
+    ctx.arc(cx + size * 0.7, cy + size * 0.3, size * 0.8, 0, Math.PI * 2)
+    ctx.arc(cx - size * 0.7, cy + size * 0.3, size * 0.8, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  
+  // Stars
+  ctx.fillStyle = '#ffffff'
+  for (let i = 0; i < 60; i++) {
+    const sx = (i * 137 + waveTimer * 0.2) % canvas.value.width
+    const sy = (i * 97 + waveTimer) % canvas.value.height
+    const twinkle = 0.5 + Math.sin(Date.now() / 500 + i) * 0.5
+    ctx.globalAlpha = twinkle * 0.8
     ctx.fillRect(sx, sy, 2, 2)
   }
+  ctx.globalAlpha = 1
   
   // Player
   if (player) {
