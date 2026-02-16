@@ -9,6 +9,7 @@
       </div>
       <div class="speed">WARP {{ speed.toFixed(1) }}</div>
       <div class="scan" v-if="scanning">SCANNING: {{ scanTarget }}</div>
+      <div class="nearby" v-if="nearbyObject">NEARBY: {{ nearbyObject.name }} [CLICK TO SCAN]</div>
     </div>
     <div class="controls">
       <p>WASD to move • SHIFT to boost • CLICK to scan objects</p>
@@ -34,6 +35,7 @@ const speed = ref(0)
 const scanning = ref(false)
 const scanTarget = ref('')
 const message = ref('')
+const nearbyObject = ref(null)
 
 const keys = { w: false, a: false, s: false, d: false, shift: false }
 const stars = []
@@ -175,9 +177,9 @@ for (let i = 0; i < 500; i++) {
   stars.push(new Star(window.innerWidth, window.innerHeight))
 }
 
-for (let i = 0; i < 5; i++) objects.push(new SpaceObject('nebula'))
-for (let i = 0; i < 8; i++) objects.push(new SpaceObject('planet'))
-for (let i = 0; i < 3; i++) objects.push(new SpaceObject('artifact'))
+for (let i = 0; i < 8; i++) objects.push(new SpaceObject('nebula'))
+for (let i = 0; i < 15; i++) objects.push(new SpaceObject('planet'))
+for (let i = 0; i < 8; i++) objects.push(new SpaceObject('artifact'))
 
 let lastMessageTime = 0
 
@@ -221,6 +223,38 @@ const animate = (time) => {
   if (time - lastMessageTime > 15000 && Math.random() > 0.995) {
     message.value = messages[Math.floor(Math.random() * messages.length)]
     lastMessageTime = time
+  }
+  
+  // Check for nearby objects
+  let closest = null
+  let closestDist = Infinity
+  for (const obj of objects) {
+    const relZ = obj.z - position.value.z
+    if (relZ < 10) continue
+    const sx = (obj.x / relZ) * 500 + cx
+    const sy = (obj.y / relZ) * 500 + cy
+    const dx = sx - cx
+    const dy = sy - cy
+    const dist = Math.sqrt(dx*dx + dy*dy) + relZ / 10
+    if (dist < closestDist && dist < 300) {
+      closest = obj
+      closestDist = dist
+    }
+  }
+  nearbyObject.value = closest
+  
+  // Draw proximity indicator
+  if (closest) {
+    const relZ = closest.z - position.value.z
+    const sx = (closest.x / relZ) * 500 + cx
+    const sy = (closest.y / relZ) * 500 + cy
+    ctx.strokeStyle = '#0ff'
+    ctx.lineWidth = 2
+    ctx.setLineDash([5, 5])
+    ctx.beginPath()
+    ctx.arc(sx, sy, (closest.size / relZ) * 500 + 20, 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.setLineDash([])
   }
   
   animationId = requestAnimationFrame(animate)
@@ -337,6 +371,18 @@ canvas {
 .scan {
   font-size: 1.2rem;
   animation: blink 0.5s infinite;
+}
+
+.nearby {
+  font-size: 1rem;
+  color: #ff0;
+  text-shadow: 0 0 10px #ff0;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 @keyframes blink {
