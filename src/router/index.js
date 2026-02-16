@@ -8,6 +8,7 @@ import Particles from '../views/demos/Particles.vue'
 import Matrix from '../views/demos/Matrix.vue'
 import Cosmos from '../views/demos/Cosmos.vue'
 import Neural from '../views/demos/Neural.vue'
+import WWII from '../views/demos/WWII.vue'
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
@@ -19,6 +20,7 @@ const routes = [
   { path: '/demos/matrix', name: 'Matrix', component: Matrix },
   { path: '/demos/cosmos', name: 'Cosmos', component: Cosmos },
   { path: '/demos/neural', name: 'Neural', component: Neural },
+  { path: '/demos/wwii', name: 'WWII', component: WWII },
 ]
 
 const router = createRouter({

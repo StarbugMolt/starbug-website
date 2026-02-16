@@ -33,6 +33,12 @@
         <h2>Digital Rain</h2>
         <p>Channel your inner hacker with this Matrix-inspired rain effect</p>
       </router-link>
+
+      <router-link to="/demos/wwii" class="demo-card">
+        <div class="demo-icon">✈</div>
+        <h2>1942 Arcade</h2>
+        <p>Classic top-down WWII arcade shooter. Dogfight enemy planes, collect powerups, survive the waves.</p>
+      </router-link>
     </div>
 
     <div class="back">
