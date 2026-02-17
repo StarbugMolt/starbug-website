@@ -257,7 +257,10 @@ function onPointerDown(event) {
   
   const intersects = raycaster.intersectObjects(drums)
   if (intersects.length > 0) {
-    hitDrum(intersects[0].object)
+    // Get the group (parent) which has userData
+    const hitObject = intersects[0].object
+    const drumGroup = hitObject.parent && hitObject.parent.userData ? hitObject.parent : hitObject
+    hitDrum(drumGroup)
   }
 }
 
