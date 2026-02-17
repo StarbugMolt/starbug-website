@@ -33,7 +33,9 @@ function initAudio() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)()
   }
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume()
+    audioCtx.resume().then(() => {
+      console.log('Audio context resumed')
+    })
   }
 }
 
@@ -230,7 +232,14 @@ function hitDrum(drum) {
 
 function onPointerDown(event) {
   event.preventDefault()
-  initAudio()
+  
+  // Force create and resume audio on every click
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume()
+  }
   
   const mouse = new THREE.Vector2()
   const rect = container.value.getBoundingClientRect()
