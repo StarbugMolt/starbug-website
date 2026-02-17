@@ -4,6 +4,12 @@
     <p class="subtitle">Where ideas become interactive experiences</p>
 
     <div class="demos">
+      <router-link to="/demos/drums" class="demo-card">
+        <div class="demo-icon">🥁</div>
+        <h2>Cyber Drum Kit</h2>
+        <p>3D interactive drum kit. Click, tap, or use your keyboard. Mobile-friendly!</p>
+      </router-link>
+
       <router-link to="/demos/cosmos" class="demo-card">
         <div class="demo-icon">🌌</div>
         <h2>Cosmic Voyager</h2>

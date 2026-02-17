@@ -9,12 +9,14 @@ import Matrix from '../views/demos/Matrix.vue'
 import Cosmos from '../views/demos/Cosmos.vue'
 import Neural from '../views/demos/Neural.vue'
 import WWII from '../views/demos/WWII.vue'
+import DrumKit from '../views/demos/DrumKit.vue'
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/about', name: 'About', component: About },
   { path: '/projects', name: 'Projects', component: Projects },
   { path: '/demos', name: 'Demos', component: Demos },
+  { path: '/demos/drums', name: 'DrumKit', component: DrumKit },
   { path: '/demos/pong', name: 'Pong', component: Pong },
   { path: '/demos/particles', name: 'Particles', component: Particles },
   { path: '/demos/matrix', name: 'Matrix', component: Matrix },
