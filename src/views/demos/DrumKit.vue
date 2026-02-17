@@ -15,18 +15,17 @@ import * as THREE from 'three'
 const container = ref(null)
 let scene, camera, renderer, drums = []
 let audioCtx = null
-let textures = {}
 
-// Drum configuration - realistic setup
+// Drum configuration with unique sounds
 const drumConfig = [
   { name: 'kick', pos: [0, -1.2, 0], size: [1.3, 1.3, 1.2], color: 0x8B4513, key: '1', type: 'kick' },
   { name: 'snare', pos: [-2, -0.3, 0.8], size: [0.85, 0.85, 0.85], color: 0xCD853F, key: '2', type: 'snare' },
   { name: 'hihat', pos: [1.8, 0.3, 0.6], size: [0.55, 0.55, 0.15], color: 0xFFD700, key: '3', type: 'hihat' },
-  { name: 'tom1', pos: [-3, 0.4, -0.2], size: [0.5, 0.45, 0.5], color: 0x8B4513, key: '4', type: 'tom' },
-  { name: 'tom2', pos: [-1.3, 0.6, -0.4], size: [0.6, 0.55, 0.6], color: 0x8B4513, key: '5', type: 'tom' },
+  { name: 'tom1', pos: [-3, 0.4, -0.2], size: [0.5, 0.45, 0.5], color: 0x8B4513, key: '4', type: 'tom1' },
+  { name: 'tom2', pos: [-1.3, 0.6, -0.4], size: [0.6, 0.55, 0.6], color: 0x8B4513, key: '5', type: 'tom2' },
   { name: 'crash', pos: [2.8, 0.7, -0.1], size: [0.9, 0.9, 0.12], color: 0xFFD700, key: '6', type: 'crash' },
   { name: 'ride', pos: [3.2, 0.3, 0.9], size: [0.75, 0.75, 0.12], color: 0xFFD700, key: '7', type: 'ride' },
-  { name: 'floor', pos: [-3.8, -0.7, 0.2], size: [0.75, 0.95, 0.75], color: 0x8B4513, key: '8', type: 'tom' },
+  { name: 'floor', pos: [-3.8, -0.7, 0.2], size: [0.75, 0.95, 0.75], color: 0x8B4513, key: '8', type: 'floor' },
 ]
 
 function initAudio() {
@@ -58,8 +57,14 @@ function playSound(type) {
     case 'ride':
       playRide(now)
       break
-    case 'tom':
-      playTom(now)
+    case 'tom1':
+      playTomHigh(now)
+      break
+    case 'tom2':
+      playTomMid(now)
+      break
+    case 'floor':
+      playTomLow(now)
       break
   }
 }
@@ -168,17 +173,43 @@ function playRide(time) {
   noise.stop(time + 0.5)
 }
 
-function playTom(time) {
+function playTomHigh(time) {
   const osc = audioCtx.createOscillator()
   const gain = audioCtx.createGain()
   osc.type = 'sine'
-  osc.frequency.setValueAtTime(200, time)
-  osc.frequency.exponentialRampToValueAtTime(80, time + 0.15)
-  gain.gain.setValueAtTime(0.6, time)
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2)
+  osc.frequency.setValueAtTime(300, time)
+  osc.frequency.exponentialRampToValueAtTime(120, time + 0.12)
+  gain.gain.setValueAtTime(0.5, time)
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.15)
   osc.connect(gain).connect(audioCtx.destination)
   osc.start(time)
-  osc.stop(time + 0.2)
+  osc.stop(time + 0.15)
+}
+
+function playTomMid(time) {
+  const osc = audioCtx.createOscillator()
+  const gain = audioCtx.createGain()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(220, time)
+  osc.frequency.exponentialRampToValueAtTime(100, time + 0.15)
+  gain.gain.setValueAtTime(0.55, time)
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18)
+  osc.connect(gain).connect(audioCtx.destination)
+  osc.start(time)
+  osc.stop(time + 0.18)
+}
+
+function playTomLow(time) {
+  const osc = audioCtx.createOscillator()
+  const gain = audioCtx.createGain()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(150, time)
+  osc.frequency.exponentialRampToValueAtTime(60, time + 0.2)
+  gain.gain.setValueAtTime(0.6, time)
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.25)
+  osc.connect(gain).connect(audioCtx.destination)
+  osc.start(time)
+  osc.stop(time + 0.25)
 }
 
 function hitDrum(drum) {
@@ -254,11 +285,9 @@ function createWoodTexture() {
   canvas.height = 512
   const ctx = canvas.getContext('2d')
   
-  // Wood base
   ctx.fillStyle = '#8B4513'
   ctx.fillRect(0, 0, 512, 512)
   
-  // Wood grain
   for (let i = 0; i < 50; i++) {
     ctx.strokeStyle = `rgba(60, 30, 10, ${Math.random() * 0.3})`
     ctx.lineWidth = 1 + Math.random() * 3
@@ -283,7 +312,6 @@ function createCymbalTexture() {
   canvas.height = 256
   const ctx = canvas.getContext('2d')
   
-  // Radial gradient for cymbal
   const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 128)
   gradient.addColorStop(0, '#FFD700')
   gradient.addColorStop(0.3, '#FFA500')
@@ -292,7 +320,6 @@ function createCymbalTexture() {
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, 256, 256)
   
-  // Cymbal grooves
   for (let r = 20; r < 140; r += 8) {
     ctx.strokeStyle = `rgba(139, 69, 19, ${0.3 + (r / 200)})`
     ctx.lineWidth = 1
@@ -301,8 +328,7 @@ function createCymbalTexture() {
     ctx.stroke()
   }
   
-  const texture = new THREE.CanvasTexture(canvas)
-  return texture
+  return new THREE.CanvasTexture(canvas)
 }
 
 function createSnareTexture() {
@@ -311,11 +337,9 @@ function createSnareTexture() {
   canvas.height = 256
   const ctx = canvas.getContext('2d')
   
-  // Snare wires pattern
   ctx.fillStyle = '#CD853F'
   ctx.fillRect(0, 0, 256, 256)
   
-  // Horizontal wires
   ctx.strokeStyle = '#888888'
   ctx.lineWidth = 2
   for (let y = 20; y < 236; y += 12) {
@@ -325,7 +349,6 @@ function createSnareTexture() {
     ctx.stroke()
   }
   
-  // Cross wires
   ctx.strokeStyle = '#666666'
   for (let i = -20; i < 276; i += 20) {
     ctx.beginPath()
@@ -334,8 +357,7 @@ function createSnareTexture() {
     ctx.stroke()
   }
   
-  const texture = new THREE.CanvasTexture(canvas)
-  return texture
+  return new THREE.CanvasTexture(canvas)
 }
 
 onMounted(() => {
@@ -353,7 +375,6 @@ onMounted(() => {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
   container.value.appendChild(renderer.domElement)
   
-  // BRIGHT LIGHTING
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
   scene.add(ambientLight)
   
@@ -374,139 +395,124 @@ onMounted(() => {
   spotLight.penumbra = 0.5
   scene.add(spotLight)
   
-  // Create textures
   const woodTexture = createWoodTexture()
   const cymbalTexture = createCymbalTexture()
   const snareTexture = createSnareTexture()
   
-  // Create drums
+  const drumGroups = [] // Store groups for animation
+  
   drumConfig.forEach(config => {
-    let geometry, material
+    const group = new THREE.Group()
+    group.position.set(...config.pos)
+    group.userData = { name: config.name, type: config.type, key: config.key }
     
     if (config.name === 'kick') {
-      // Kick drum - cylinder with rounded feel
-      geometry = new THREE.CylinderGeometry(config.size[0], config.size[0], config.size[2], 32)
-      const kickMat = new THREE.MeshStandardMaterial({ 
+      const geometry = new THREE.CylinderGeometry(config.size[0], config.size[0], config.size[2], 32)
+      const material = new THREE.MeshStandardMaterial({ 
         map: woodTexture,
         roughness: 0.6,
         metalness: 0.1
       })
-      material = kickMat
+      const drum = new THREE.Mesh(geometry, material)
+      drum.castShadow = true
+      drum.receiveShadow = true
+      group.add(drum)
       
-      // Add kick head (white drum head)
+      // Kick head - attached to group
       const headGeom = new THREE.CircleGeometry(config.size[0] * 0.9, 32)
       const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })
       const head = new THREE.Mesh(headGeom, headMat)
       head.rotation.x = -Math.PI / 2
       head.position.y = config.size[2] / 2 + 0.01
-      
-      const drum = new THREE.Mesh(geometry, material)
-      drum.position.set(...config.pos)
-      drum.userData = { name: config.name, type: config.type, key: config.key }
-      drum.castShadow = true
-      drum.receiveShadow = true
-      drums.push(drum)
-      scene.add(drum)
-      scene.add(head)
+      group.add(head)
       
     } else if (config.type === 'hihat' || config.type === 'crash' || config.type === 'ride') {
-      // Cymbals
-      geometry = new THREE.CylinderGeometry(config.size[0], config.size[0], config.size[2], 32)
-      material = new THREE.MeshStandardMaterial({ 
+      const geometry = new THREE.CylinderGeometry(config.size[0], config.size[0], config.size[2], 32)
+      const material = new THREE.MeshStandardMaterial({ 
         map: cymbalTexture,
         roughness: 0.3,
         metalness: 0.8,
         color: config.color
       })
-      
       const drum = new THREE.Mesh(geometry, material)
-      drum.position.set(...config.pos)
       drum.rotation.x = Math.PI / 2
-      drum.userData = { name: config.name, type: config.type, key: config.key }
       drum.castShadow = true
-      drums.push(drum)
-      scene.add(drum)
+      group.add(drum)
       
-      // Add cymbal stand
+      // Cymbal stand
       const standGeom = new THREE.CylinderGeometry(0.03, 0.03, 3, 8)
       const standMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 })
       const stand = new THREE.Mesh(standGeom, standMat)
-      stand.position.set(config.pos[0], config.pos[1] - 1.5, config.pos[2])
+      stand.position.y = -1.5
       scene.add(stand)
       
     } else if (config.name === 'snare') {
-      geometry = new THREE.CylinderGeometry(config.size[0], config.size[0] * 0.85, config.size[1], 32)
-      material = new THREE.MeshStandardMaterial({ 
+      const geometry = new THREE.CylinderGeometry(config.size[0], config.size[0] * 0.85, config.size[1], 32)
+      const material = new THREE.MeshStandardMaterial({ 
         map: snareTexture,
         roughness: 0.5,
         metalness: 0.2
       })
-      
       const drum = new THREE.Mesh(geometry, material)
-      drum.position.set(...config.pos)
-      drum.userData = { name: config.name, type: config.type, key: config.key }
       drum.castShadow = true
-      drums.push(drum)
-      scene.add(drum)
+      group.add(drum)
       
       // Snare head
       const headGeom = new THREE.CircleGeometry(config.size[0] * 0.88, 32)
       const headMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.9 })
       const head = new THREE.Mesh(headGeom, headMat)
       head.rotation.x = -Math.PI / 2
-      head.position.set(config.pos[0], config.pos[1] + config.size[1] / 2 + 0.02, config.pos[2])
-      scene.add(head)
+      head.position.y = config.size[1] / 2 + 0.02
+      group.add(head)
+      
+      // Rim
+      const rimGeom = new THREE.TorusGeometry(config.size[0] * 0.92, 0.04, 8, 32)
+      const rimMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.2 })
+      const rim = new THREE.Mesh(rimGeom, rimMat)
+      rim.position.y = config.size[1] / 2 + 0.03
+      rim.rotation.x = Math.PI / 2
+      group.add(rim)
       
     } else {
       // Toms
-      geometry = new THREE.CylinderGeometry(config.size[0], config.size[0] * 0.85, config.size[1], 32)
-      material = new THREE.MeshStandardMaterial({ 
+      const geometry = new THREE.CylinderGeometry(config.size[0], config.size[0] * 0.85, config.size[1], 32)
+      const material = new THREE.MeshStandardMaterial({ 
         map: woodTexture,
         roughness: 0.6,
         metalness: 0.1
       })
-      
       const drum = new THREE.Mesh(geometry, material)
-      drum.position.set(...config.pos)
-      drum.userData = { name: config.name, type: config.type, key: config.key }
       drum.castShadow = true
-      drums.push(drum)
-      scene.add(drum)
+      group.add(drum)
       
       // Tom head
       const headGeom = new THREE.CircleGeometry(config.size[0] * 0.88, 32)
       const headMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })
       const head = new THREE.Mesh(headGeom, headMat)
       head.rotation.x = -Math.PI / 2
-      head.position.set(config.pos[0], config.pos[1] + config.size[1] / 2 + 0.02, config.pos[2])
-      scene.add(head)
+      head.position.y = config.size[1] / 2 + 0.02
+      group.add(head)
       
-      // Mount for toms
-      const mountGeom = new THREE.BoxGeometry(0.1, 0.8, 0.1)
-      const mountMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7 })
-      const mount = new THREE.Mesh(mountGeom, mountMat)
-      mount.position.set(config.pos[0], config.pos[1] - 0.5, config.pos[2] - 0.3)
-      scene.add(mount)
-    }
-    
-    // Add rim detail
-    if (config.type !== 'hihat' && config.type !== 'crash' && config.type !== 'ride') {
+      // Rim
       const rimGeom = new THREE.TorusGeometry(config.size[0] * 0.92, 0.04, 8, 32)
       const rimMat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.9, roughness: 0.2 })
       const rim = new THREE.Mesh(rimGeom, rimMat)
-      rim.position.set(config.pos[0], config.pos[1] + config.size[1] / 2 + 0.03, config.pos[2])
+      rim.position.y = config.size[1] / 2 + 0.03
       rim.rotation.x = Math.PI / 2
-      scene.add(rim)
+      group.add(rim)
+      
+      // Mount
+      const mountGeom = new THREE.BoxGeometry(0.1, 0.8, 0.1)
+      const mountMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.7 })
+      const mount = new THREE.Mesh(mountGeom, mountMat)
+      mount.position.set(0, -0.5, -0.3)
+      scene.add(mount)
     }
+    
+    drums.push(group)
+    scene.add(group)
+    drumGroups.push(group)
   })
-  
-  // Drum throne / seat
-  const seatGeom = new THREE.CylinderGeometry(0.4, 0.4, 0.15, 16)
-  const seatMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 })
-  const seat = new THREE.Mesh(seatGeom, seatMat)
-  seat.position.set(0, -1.35, -1.5)
-  seat.receiveShadow = true
-  scene.add(seat)
   
   // Platform
   const platformGeom = new THREE.BoxGeometry(14, 0.3, 8)
@@ -525,7 +531,6 @@ onMounted(() => {
   floor.receiveShadow = true
   scene.add(floor)
   
-  // Event listeners
   container.value.addEventListener('pointerdown', onPointerDown)
   container.value.addEventListener('touchstart', onPointerDown, { passive: false })
   window.addEventListener('keydown', onKeyDown)
@@ -535,8 +540,8 @@ onMounted(() => {
     requestAnimationFrame(animate)
     
     const time = Date.now() * 0.001
-    drums.forEach((drum, i) => {
-      drum.position.y = drumConfig[i].pos[1] + Math.sin(time + i) * 0.015
+    drumGroups.forEach((group, i) => {
+      group.position.y = drumConfig[i].pos[1] + Math.sin(time + i) * 0.015
     })
     
     renderer.render(scene, camera)
