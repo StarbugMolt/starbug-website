@@ -135,7 +135,7 @@ function init() {
     colors[i * 3 + 1] = color.g
     colors[i * 3 + 2] = color.b
     
-    sizes[i] = Math.random() * 2 + 1
+    sizes[i] = Math.random() * 0.5 + 0.3 // Tiny points
     
     starData.push({
       angle,
@@ -170,9 +170,9 @@ function init() {
         
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         
-        // Stars get bigger and stretch warp
-        float at stretch = 1.0 + scrollSpeed * warpIntensity * 2.0;
-        gl_PointSize = size * (200.0 / -mvPosition.z) * (1.0 + warpIntensity);
+        // Stars get bigger at warp
+        float stretch = 1.0 + scrollSpeed * warpIntensity * 2.0;
+        gl_PointSize = size * (80.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -245,7 +245,7 @@ function init() {
   nearGeometry.setAttribute('color', new THREE.BufferAttribute(nearColors, 3))
 
   const nearMaterial = new THREE.PointsMaterial({
-    size: 4,
+    size: 1.5,
     vertexColors: true,
     transparent: true,
     opacity: 0.9,
@@ -419,8 +419,8 @@ function animate() {
   }
   
   starsNear.geometry.attributes.position.needsUpdate = true
-  starsNear.material.opacity = 0.6 + warpIntensity * 0.4
-  starsNear.material.size = 4 + warpIntensity * 6
+  starsNear.material.opacity = 0.4 + warpIntensity * 0.3
+  starsNear.material.size = 1.5 + warpIntensity * 2
 
   // Update warp streaks
   warpStreaks.material.opacity = warpIntensity * 0.7
