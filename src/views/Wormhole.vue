@@ -135,7 +135,7 @@ function init() {
     colors[i * 3 + 1] = color.g
     colors[i * 3 + 2] = color.b
     
-    sizes[i] = Math.random() * 0.5 + 0.3 // Tiny points
+    sizes[i] = Math.random() * 0.2 + 0.1 // Very tiny points
     
     starData.push({
       angle,
@@ -172,7 +172,7 @@ function init() {
         
         // Stars get bigger at warp
         float stretch = 1.0 + scrollSpeed * warpIntensity * 2.0;
-        gl_PointSize = size * (80.0 / -mvPosition.z);
+        gl_PointSize = size * (30.0 / -mvPosition.z);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -211,7 +211,7 @@ function init() {
   scene.add(starsOutside)
 
   // ===== NEAR STARS (passing close by) =====
-  const nearCount = 100
+  const nearCount = 30
   const nearGeometry = new THREE.BufferGeometry()
   const nearPositions = new Float32Array(nearCount * 3)
   const nearColors = new Float32Array(nearCount * 3)
@@ -219,7 +219,7 @@ function init() {
 
   for (let i = 0; i < nearCount; i++) {
     const angle = Math.random() * Math.PI * 2
-    const radius = tubeRadius * 0.8 + Math.random() * 1.5 // Just outside camera
+    const radius = tubeRadius * 0.5 + Math.random() * 0.8 // Just outside camera
     const t = Math.random()
     const point = curve.getPoint(t)
     const tangent = curve.getTangent(t)
@@ -419,8 +419,8 @@ function animate() {
   }
   
   starsNear.geometry.attributes.position.needsUpdate = true
-  starsNear.material.opacity = 0.4 + warpIntensity * 0.3
-  starsNear.material.size = 1.5 + warpIntensity * 2
+  starsNear.material.opacity = 0.3 + warpIntensity * 0.2
+  starsNear.material.size = 0.8 + warpIntensity
 
   // Update warp streaks
   warpStreaks.material.opacity = warpIntensity * 0.7
