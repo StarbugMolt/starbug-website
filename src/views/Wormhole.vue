@@ -18,7 +18,7 @@ const destination = ref('UNKNOWN')
 const destinations = ['ANDROMEDA', 'SECTOR 7', 'DEEP SPACE', 'THE VOID', 'KEPLER-442', 'OUTER RIM', 'UNKNOWN']
 
 let scene, camera, renderer, tube
-let particles, starStreaks
+let starsOutside, starsNear, warpStreaks
 let curve
 let mouseX = 0, mouseY = 0
 let scrollSpeed = 1
@@ -44,104 +44,115 @@ onUnmounted(() => {
 
 function init() {
   scene = new THREE.Scene()
-  scene.fog = new THREE.FogExp2(0x000000, 0.015)
+  scene.fog = new THREE.FogExp2(0x000000, 0.008)
 
-  camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 1000)
+  camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.1, 2000)
   
   renderer = new THREE.WebGLRenderer({ antialias: true })
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   document.querySelector('.wormhole-container').appendChild(renderer.domElement)
 
-  // Create a longer, looping wormhole path
+  // Create a looping wormhole path
   curve = new THREE.CatmullRomCurve3([
     new THREE.Vector3(0, 0, 0),
-    new THREE.Vector3(2, 1, -30),
-    new THREE.Vector3(-2, -1, -60),
-    new THREE.Vector3(3, -2, -90),
-    new THREE.Vector3(-3, 2, -120),
-    new THREE.Vector3(1, 3, -150),
-    new THREE.Vector3(-1, -3, -180),
-    new THREE.Vector3(2, 2, -210),
-    new THREE.Vector3(-2, -2, -240),
-    new THREE.Vector3(0, 0, -270),
-    new THREE.Vector3(2, 1, -300),
-    new THREE.Vector3(-2, -1, -330),
-    new THREE.Vector3(3, -2, -360),
-    new THREE.Vector3(-3, 2, -390),
-    new THREE.Vector3(1, 3, -420),
-    new THREE.Vector3(-1, -3, -450),
-    new THREE.Vector3(2, 2, -480),
-    new THREE.Vector3(-2, -2, -510),
-    new THREE.Vector3(0, 0, -540),
-    new THREE.Vector3(2, 1, -570),
-    new THREE.Vector3(-2, -1, -600),
-  ], true) // Closed loop
+    new THREE.Vector3(5, 2, -50),
+    new THREE.Vector3(-5, -2, -100),
+    new THREE.Vector3(8, -3, -150),
+    new THREE.Vector3(-8, 3, -200),
+    new THREE.Vector3(3, 5, -250),
+    new THREE.Vector3(-3, -5, -300),
+    new THREE.Vector3(5, 5, -350),
+    new THREE.Vector3(-5, -5, -400),
+    new THREE.Vector3(0, 0, -450),
+  ], true)
 
-  // Create multiple tube segments for the visual
-  const tubeGeometry = new THREE.TubeGeometry(curve, 400, tubeRadius, 24, true)
+  // Wormhole ring (the portal effect) - visible as we look through it
+  const tubeGeometry = new THREE.TubeGeometry(curve, 300, tubeRadius, 32, true)
   const tubeMaterial = new THREE.MeshBasicMaterial({
     color: 0x00ffff,
     wireframe: true,
     transparent: true,
-    opacity: 0.15,
+    opacity: 0.12,
     side: THREE.BackSide
   })
   tube = new THREE.Mesh(tubeGeometry, tubeMaterial)
   scene.add(tube)
 
   // Inner glow ring
-  const ringGeometry = new THREE.TubeGeometry(curve, 400, tubeRadius - 0.3, 24, true)
-  const ringMaterial = new THREE.MeshBasicMaterial({
+  const innerRingGeom = new THREE.TubeGeometry(curve, 300, tubeRadius - 0.5, 32, true)
+  const innerRingMat = new THREE.MeshBasicMaterial({
     color: 0xff00ff,
     wireframe: true,
     transparent: true,
-    opacity: 0.08,
+    opacity: 0.06,
     side: THREE.BackSide
   })
-  const ring = new THREE.Mesh(ringGeometry, ringMaterial)
-  scene.add(ring)
+  const innerRing = new THREE.Mesh(innerRingGeom, innerRingMat)
+  scene.add(innerRing)
 
-  // Stars/particles inside the wormhole
-  const starCount = 1500
+  // ===== STARS OUTSIDE THE WORMHOLE (the main visual) =====
+  const starCount = 3000
   const starGeometry = new THREE.BufferGeometry()
-  const starPositions = new Float32Array(starCount * 3)
-  const starColors = new Float32Array(starCount * 3)
-  const starSizes = new Float32Array(starCount)
-  const starAngles = new Float32Array(starCount)
-  const starRadii = new Float32Array(starCount)
-  const starT = new Float32Array(starCount)
+  const positions = new Float32Array(starCount * 3)
+  const colors = new Float32Array(starCount * 3)
+  const sizes = new Float32Array(starCount)
+  const starData = [] // Store extra data for animation
 
   for (let i = 0; i < starCount; i++) {
-    starAngles[i] = Math.random() * Math.PI * 2
-    starRadii[i] = Math.random() * (tubeRadius - 0.5)
-    starT[i] = Math.random() * 1 // Position along curve (0-1)
+    // Stars are OUTSIDE the wormhole - in the universe beyond
+    const angle = Math.random() * Math.PI * 2
+    const radius = tubeRadius + 2 + Math.random() * 200 // Outside the tube
+    const t = Math.random() // Position along curve
+    const point = curve.getPoint(t)
+    const tangent = curve.getTangent(t)
     
-    const x = Math.cos(starAngles[i]) * starRadii[i]
-    const y = Math.sin(starAngles[i]) * starRadii[i]
-    const z = 0
+    // Calculate perpendicular vectors
+    const up = new THREE.Vector3(0, 1, 0)
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize()
+    const localUp = new THREE.Vector3().crossVectors(right, tangent).normalize()
     
-    starPositions[i * 3] = x
-    starPositions[i * 3 + 1] = y
-    starPositions[i * 3 + 2] = z
+    // Position outside the tube
+    const x = point.x + right.x * Math.cos(angle) * radius + localUp.x * Math.sin(angle) * radius
+    const y = point.y + right.y * Math.cos(angle) * radius + localUp.y * Math.sin(angle) * radius
+    const z = point.z + right.z * Math.cos(angle) * radius + localUp.z * Math.sin(angle) * radius
     
+    positions[i * 3] = x
+    positions[i * 3 + 1] = y
+    positions[i * 3 + 2] = z
+    
+    // Random star colors (blue-ish white)
     const color = new THREE.Color()
-    color.setHSL(0.5 + Math.random() * 0.3, 0.8, 0.6 + Math.random() * 0.4)
-    starColors[i * 3] = color.r
-    starColors[i * 3 + 1] = color.g
-    starColors[i * 3 + 2] = color.b
+    const temp = Math.random()
+    if (temp < 0.7) {
+      color.setHSL(0.6, 0.3, 0.8 + Math.random() * 0.2) // White/blue
+    } else if (temp < 0.9) {
+      color.setHSL(0.1, 0.8, 0.6) // Orange
+    } else {
+      color.setHSL(0.8, 0.8, 0.7) // Blue
+    }
+    colors[i * 3] = color.r
+    colors[i * 3 + 1] = color.g
+    colors[i * 3 + 2] = color.b
     
-    starSizes[i] = Math.random() * 2 + 1
+    sizes[i] = Math.random() * 2 + 1
+    
+    starData.push({
+      angle,
+      radius,
+      t,
+      speed: 0.5 + Math.random() * 1.5,
+      baseRadius: radius
+    })
   }
 
-  starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3))
-  starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3))
-  starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1))
+  starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  starGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1))
 
-  // Custom shader for warp effect
+  // Shader for stars with glow
   const starMaterial = new THREE.ShaderMaterial({
     uniforms: {
-      time: { value: 0 },
       scrollSpeed: { value: 1 },
       warpIntensity: { value: 0 }
     },
@@ -159,9 +170,9 @@ function init() {
         
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         
-        // Stretch based on speed
-        float stretch = 1.0 + scrollSpeed * warpIntensity;
-        gl_PointSize = size * (300.0 / -mvPosition.z) * stretch;
+        // Stars get bigger and stretch warp
+        float at stretch = 1.0 + scrollSpeed * warpIntensity * 2.0;
+        gl_PointSize = size * (200.0 / -mvPosition.z) * (1.0 + warpIntensity);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -173,18 +184,21 @@ function init() {
       
       void main() {
         vec2 center = gl_PointCoord - vec2(0.5);
-        
-        // Make points elongated (streaks) when at warp
-        float stretch = 1.0 + scrollSpeed * warpIntensity * 3.0;
-        center.y *= stretch;
-        
         float dist = length(center);
+        
+        // Star glow
         float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+        float glow = exp(-dist * 4.0);
         
-        // Add glow
-        float glow = exp(-dist * 3.0) * 0.5;
+        // Add streak effect at warp
+        if (warpIntensity > 0.3) {
+          float streak = 1.0 - abs(center.y) * 3.0;
+          streak = max(0.0, streak);
+          alpha = max(alpha, streak * warpIntensity * 0.5);
+        }
         
-        gl_FragColor = vec4(vColor + glow, alpha);
+        vec3 finalColor = vColor + glow * 0.3;
+        gl_FragColor = vec4(finalColor, alpha);
       }
     `,
     transparent: true,
@@ -192,62 +206,110 @@ function init() {
     depthWrite: false
   })
 
-  particles = new THREE.Points(starGeometry, starMaterial)
-  particles.userData = { angles: starAngles, radii: starRadii, t: starT }
-  scene.add(particles)
+  starsOutside = new THREE.Points(starGeometry, starMaterial)
+  starsOutside.userData = { stars: starData }
+  scene.add(starsOutside)
 
-  // Warp streaks (lines that appear at high speed)
-  const streakCount = 200
-  const streakGeometry = new THREE.BufferGeometry()
-  const streakPositions = new Float32Array(streakCount * 6) // 2 points per line
-  const streakColors = new Float32Array(streakCount * 6)
-  
-  for (let i = 0; i < streakCount; i++) {
+  // ===== NEAR STARS (passing close by) =====
+  const nearCount = 100
+  const nearGeometry = new THREE.BufferGeometry()
+  const nearPositions = new Float32Array(nearCount * 3)
+  const nearColors = new Float32Array(nearCount * 3)
+  const nearData = []
+
+  for (let i = 0; i < nearCount; i++) {
     const angle = Math.random() * Math.PI * 2
-    const radius = Math.random() * (tubeRadius - 1)
+    const radius = tubeRadius * 0.8 + Math.random() * 1.5 // Just outside camera
     const t = Math.random()
     const point = curve.getPoint(t)
-    const pointAhead = curve.getPoint((t + 0.02) % 1)
+    const tangent = curve.getTangent(t)
     
-    const x = Math.cos(angle) * radius + point.x
-    const y = Math.sin(angle) * radius + point.y
-    const z = point.z
+    const up = new THREE.Vector3(0, 1, 0)
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize()
+    const localUp = new THREE.Vector3().crossVectors(right, tangent).normalize()
     
-    const x2 = Math.cos(angle) * radius + pointAhead.x
-    const y2 = Math.sin(angle) * radius + pointAhead.y
-    const z2 = pointAhead.z
-    
-    streakPositions[i * 6] = x
-    streakPositions[i * 6 + 1] = y
-    streakPositions[i * 6 + 2] = z
-    streakPositions[i * 6 + 3] = x2
-    streakPositions[i * 6 + 4] = y2
-    streakPositions[i * 6 + 5] = z2
+    nearPositions[i * 3] = point.x + right.x * Math.cos(angle) * radius + localUp.x * Math.sin(angle) * radius
+    nearPositions[i * 3 + 1] = point.y + right.y * Math.cos(angle) * radius + localUp.y * Math.sin(angle) * radius
+    nearPositions[i * 3 + 2] = point.z + right.z * Math.cos(angle) * radius + localUp.z * Math.sin(angle) * radius
     
     const color = new THREE.Color()
-    color.setHSL(0.6 + Math.random() * 0.2, 1, 0.7)
-    streakColors[i * 6] = color.r
-    streakColors[i * 6 + 1] = color.g
-    streakColors[i * 6 + 2] = color.b
-    streakColors[i * 6 + 3] = color.r
-    streakColors[i * 6 + 4] = color.g
-    streakColors[i * 6 + 5] = color.b
+    color.setHSL(0.5 + Math.random() * 0.2, 1, 0.7 + Math.random() * 0.3)
+    nearColors[i * 3] = color.r
+    nearColors[i * 3 + 1] = color.g
+    nearColors[i * 3 + 2] = color.b
+    
+    nearData.push({ angle, radius, t, speed: 2 + Math.random() * 3 })
   }
-  
-  streakGeometry.setAttribute('position', new THREE.BufferAttribute(streakPositions, 3))
-  streakGeometry.setAttribute('color', new THREE.BufferAttribute(streakColors, 3))
-  
-  const streakMaterial = new THREE.LineBasicMaterial({
+
+  nearGeometry.setAttribute('position', new THREE.BufferAttribute(nearPositions, 3))
+  nearGeometry.setAttribute('color', new THREE.BufferAttribute(nearColors, 3))
+
+  const nearMaterial = new THREE.PointsMaterial({
+    size: 4,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending
+  })
+
+  starsNear = new THREE.Points(nearGeometry, nearMaterial)
+  starsNear.userData = { stars: nearData }
+  scene.add(starsNear)
+
+  // ===== WARP STREAKS (lines at high speed) =====
+  const streakCount = 150
+  const streakGeom = new THREE.BufferGeometry()
+  const streakPos = new Float32Array(streakCount * 6)
+  const streakCol = new Float32Array(streakCount * 6)
+  const streakData = []
+
+  for (let i = 0; i < streakCount; i++) {
+    const angle = Math.random() * Math.PI * 2
+    const radius = tubeRadius + Math.random() * 50
+    const t = Math.random()
+    const point = curve.getPoint(t)
+    const tangent = curve.getTangent(t)
+    
+    const up = new THREE.Vector3(0, 1, 0)
+    const right = new THREE.Vector3().crossVectors(tangent, up).normalize()
+    const localUp = new THREE.Vector3().crossVectors(right, tangent).normalize()
+    
+    const length = 5 + Math.random() * 20
+    
+    streakPos[i * 6] = point.x + right.x * Math.cos(angle) * radius + localUp.x * Math.sin(angle) * radius
+    streakPos[i * 6 + 1] = point.y + right.y * Math.cos(angle) * radius + localUp.y * Math.sin(angle) * radius
+    streakPos[i * 6 + 2] = point.z + right.z * Math.cos(angle) * radius + localUp.z * Math.sin(angle) * radius
+    streakPos[i * 6 + 3] = streakPos[i * 6]
+    streakPos[i * 6 + 4] = streakPos[i * 6 + 1]
+    streakPos[i * 6 + 5] = streakPos[i * 6 + 2] + length
+    
+    const color = new THREE.Color()
+    color.setHSL(0.5 + Math.random() * 0.3, 1, 0.8)
+    streakCol[i * 6] = color.r
+    streakCol[i * 6 + 1] = color.g
+    streakCol[i * 6 + 2] = color.b
+    streakCol[i * 6 + 3] = color.r * 0.3
+    streakCol[i * 6 + 4] = color.g * 0.3
+    streakCol[i * 6 + 5] = color.b * 0.3
+    
+    streakData.push({ angle, radius, t, length })
+  }
+
+  streakGeom.setAttribute('position', new THREE.BufferAttribute(streakPos, 3))
+  streakGeom.setAttribute('color', new THREE.BufferAttribute(streakCol, 3))
+
+  const streakMat = new THREE.LineBasicMaterial({
     vertexColors: true,
     transparent: true,
     opacity: 0,
     blending: THREE.AdditiveBlending
   })
-  
-  starStreaks = new THREE.LineSegments(streakGeometry, streakMaterial)
-  scene.add(starStreaks)
 
-  // Random destination change
+  warpStreaks = new THREE.LineSegments(streakGeom, streakMat)
+  warpStreaks.userData = { streaks: streakData }
+  scene.add(warpStreaks)
+
+  // Change destination periodically
   setInterval(() => {
     destination.value = destinations[Math.floor(Math.random() * destinations.length)]
   }, 8000)
@@ -259,7 +321,7 @@ function onMouseMove(e) {
 }
 
 function onWheel(e) {
-  scrollSpeed = Math.max(0.3, Math.min(8, scrollSpeed + e.deltaY * 0.002))
+  scrollSpeed = Math.max(0.3, Math.min(10, scrollSpeed + e.deltaY * 0.003))
 }
 
 function onResize() {
@@ -271,19 +333,20 @@ function onResize() {
 function animate() {
   animationId = requestAnimationFrame(animate)
 
+  const warpIntensity = Math.min(1, (scrollSpeed - 1) / 5)
+
   // Move camera along the curve
-  cameraT += 0.0005 * scrollSpeed
+  cameraT += 0.0004 * scrollSpeed
   if (cameraT > 1) cameraT -= 1
   
-  // Get position and tangent on curve
+  // Get position on curve
   const camPos = curve.getPoint(cameraT)
   const camTangent = curve.getTangent(cameraT)
   
-  // Add mouse steering offset (stay inside tube)
-  const offsetX = mouseX * (tubeRadius - 1) * 0.6
-  const offsetY = mouseY * (tubeRadius - 1) * 0.6
+  // Mouse offset
+  const offsetX = mouseX * 1.5
+  const offsetY = mouseY * 1.5
   
-  // Calculate perpendicular vectors for the offset
   const up = new THREE.Vector3(0, 1, 0)
   const right = new THREE.Vector3().crossVectors(camTangent, up).normalize()
   const localUp = new THREE.Vector3().crossVectors(right, camTangent).normalize()
@@ -292,70 +355,107 @@ function animate() {
   camera.position.add(right.multiplyScalar(offsetX))
   camera.position.add(localUp.multiplyScalar(offsetY))
   
-  // Look forward along the curve
-  const lookAtPoint = curve.getPoint((cameraT + 0.02) % 1)
+  // Look forward along curve
+  const lookAtPoint = curve.getPoint((cameraT + 0.015) % 1)
   camera.lookAt(lookAtPoint)
-  
-  // Add slight roll based on steering
-  camera.rotation.z = -mouseX * 0.2
+  camera.rotation.z = -mouseX * 0.15
 
-  // Update particles
-  const positions = particles.geometry.attributes.position.array
-  const colors = particles.geometry.attributes.color.array
-  const sizes = particles.geometry.attributes.size.array
-  const { angles, radii, t } = particles.userData
+  // Update OUTSIDE stars
+  const starPositions = starsOutside.geometry.attributes.position.array
+  const starColors = starsOutside.geometry.attributes.color.array
+  const { stars } = starsOutside.userData
   
-  const warpIntensity = Math.min(1, (scrollSpeed - 1) / 4)
-  
-  for (let i = 0; i < t.length; i++) {
-    // Move stars along the tube
-    t[i] += 0.001 * scrollSpeed
-    if (t[i] > 1) t[i] -= 1
+  for (let i = 0; i < stars.length; i++) {
+    const s = stars[i]
     
-    // Slowly rotate angle
-    angles[i] += 0.002 * scrollSpeed
+    // Move along curve toward camera (stars come toward us)
+    s.t -= 0.0003 * s.speed * scrollSpeed
+    if (s.t < 0) s.t += 1
     
-    // Get position on curve
-    const point = curve.getPoint(t[i])
-    const tangent = curve.getTangent(t[i])
+    // Slight wobble
+    const wobble = Math.sin(s.t * 30 + i) * 0.5
     
-    // Calculate perpendicular
-    const up = new THREE.Vector3(0, 1, 0)
+    const point = curve.getPoint(s.t)
+    const tangent = curve.getTangent(s.t)
     const r = new THREE.Vector3().crossVectors(tangent, up).normalize()
     const u = new THREE.Vector3().crossVectors(r, tangent).normalize()
     
-    // Add some wobble
-    const wobble = Math.sin(t[i] * 20 + i) * 0.3
+    const r2 = s.baseRadius + wobble + warpIntensity * 5
     
-    positions[i * 3] = Math.cos(angles[i]) * (radii[i] + wobble) + point.x + r.x * wobble
-    positions[i * 3 + 1] = Math.sin(angles[i]) * (radii[i] + wobble) + point.y + u.y * wobble
-    positions[i * 3 + 2] = point.z
+    starPositions[i * 3] = point.x + r.x * Math.cos(s.angle) * r2 + u.x * Math.sin(s.angle) * r2
+    starPositions[i * 3 + 1] = point.y + r.y * Math.cos(s.angle) * r2 + u.y * Math.sin(s.angle) * r2
+    starPositions[i * 3 + 2] = point.z + r.z * Math.cos(s.angle) * r2 + u.z * Math.sin(s.angle) * r2
     
-    // Color shift at warp speed
-    if (warpIntensity > 0.3) {
-      const shift = warpIntensity * 0.3
-      colors[i * 3] = Math.min(1, colors[i * 3] + shift)
-      colors[i * 3 + 2] = Math.max(0, colors[i * 3 + 2] - shift * 0.5)
+    // Color shift at warp
+    if (warpIntensity > 0.4) {
+      const shift = warpIntensity * 0.4
+      starColors[i * 3] = Math.min(1, starColors[i * 3] + shift)
     }
-    
-    // Size pulses
-    sizes[i] = (Math.sin(t[i] * 50 + i * 0.1) * 0.5 + 1.5) * (1 + warpIntensity)
   }
   
-  particles.geometry.attributes.position.needsUpdate = true
-  particles.geometry.attributes.color.needsUpdate = true
-  particles.geometry.attributes.size.needsUpdate = true
+  starsOutside.geometry.attributes.position.needsUpdate = true
+  starsOutside.geometry.attributes.color.needsUpdate = true
+  starsOutside.material.uniforms.scrollSpeed.value = scrollSpeed
+ s.warpIntensity.value = warpIntensity
+
+  // Update near stars
+  const nearPos = starsNear.geometry.attributes.position.array
+  const nearStars = starsNear.userData.stars
   
-  // Update shader uniforms
-  particles.material.uniforms.scrollSpeed.value = scrollSpeed
-  particles.material.uniforms.warpIntensity.value = warpIntensity
-  particles.material.uniforms.time.value += 0.01
+  for (let i = 0; i < nearStars.length; i++) {
+    const s = nearStars[i]
+    
+    s.t -= 0.001 * s.speed * scrollSpeed
+    if (s.t < 0) s.t += 1
+    
+    const point = curve.getPoint(s.t)
+    const tangent = curve.getTangent(s.t)
+    const r = new THREE.Vector3().crossVectors(tangent, up).normalize()
+    const u = new THREE.Vector3().crossVectors(r, tangent).normalize()
+    
+    nearPos[i * 3] = point.x + r.x * Math.cos(s.angle) * s.radius + u.x * Math.sin(s.angle) * s.radius
+    nearPos[i * 3 + 1] = point.y + r.y * Math.cos(s.angle) * s.radius + u.y * Math.sin(s.angle) * s.radius
+    nearPos[i * 3 + 2] = point.z + r.z * Math.cos(s.angle) * s.radius + u.z * Math.sin(s.angle) * s.radius
+  }
   
-  // Show/hide warp streaks based on speed
-  starStreaks.material.opacity = warpIntensity * 0.8
+  starsNear.geometry.attributes.position.needsUpdate = true
+  starsNear.material.opacity = 0.6 + warpIntensity * 0.4
+  starsNear.material.size = 4 + warpIntensity * 6
+
+  // Update warp streaks
+  warpStreaks.material.opacity = warpIntensity * 0.7
   
-  // Rotate tube slightly for effect
-  tube.rotation.z += 0.0005 * scrollSpeed
+  if (warpIntensity > 0.2) {
+    const streakPos = warpStreaks.geometry.attributes.position.array
+    const streakCols = warpStreaks.geometry.attributes.color.array
+    const streaks = warpStreaks.userData.streaks
+    
+    for (let i = 0; i < streaks.length; i++) {
+      const s = streaks[i]
+      
+      s.t -= 0.0005 * scrollSpeed
+      if (s.t < 0) s.t += 1
+      
+      const point = curve.getPoint(s.t)
+      const tangent = curve.getTangent(s.t)
+      const r = new THREE.Vector3().crossVectors(tangent, up).normalize()
+      const u = new THREE.Vector3().crossVectors(r, tangent).normalize()
+      
+      const len = s.length * (1 + warpIntensity * 3)
+      
+      streakPos[i * 6] = point.x + r.x * Math.cos(s.angle) * s.radius + u.x * Math.sin(s.angle) * s.radius
+      streakPos[i * 6 + 1] = point.y + r.y * Math.cos(s.angle) * s.radius + u.y * Math.sin(s.angle) * s.radius
+      streakPos[i * 6 + 2] = point.z + r.z * Math.cos(s.angle) * s.radius + u.z * Math.sin(s.angle) * s.radius
+      streakPos[i * 6 + 3] = streakPos[i * 6]
+      streakPos[i * 6 + 4] = streakPos[i * 6 + 1]
+      streakPos[i * 6 + 5] = streakPos[i * 6 + 2] - len
+    }
+    
+    warpStreaks.geometry.attributes.position.needsUpdate = true
+  }
+
+  // Subtle tube rotation
+  tube.rotation.z += 0.0003 * scrollSpeed
 
   renderer.render(scene, camera)
 }
