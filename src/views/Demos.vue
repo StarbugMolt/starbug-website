@@ -45,6 +45,12 @@
         <h2>1942 Arcade</h2>
         <p>Classic top-down WWII arcade shooter. Dogfight enemy planes, collect powerups, survive the waves.</p>
       </router-link>
+
+      <router-link to="/wormhole" class="demo-card">
+        <div class="demo-icon">🌀</div>
+        <h2>Wormhole</h2>
+        <p>Fly through an infinite 3D wormhole. Steer with your mouse, warp with scroll. Where does it lead? Don't ask questions.</p>
+      </router-link>
     </div>
 
     <div class="back">

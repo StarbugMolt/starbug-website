@@ -10,6 +10,7 @@ import Cosmos from '../views/demos/Cosmos.vue'
 import Neural from '../views/demos/Neural.vue'
 import WWII from '../views/demos/WWII.vue'
 import DrumKit from '../views/demos/DrumKit.vue'
+import Wormhole from '../views/Wormhole.vue'
 
 const routes = [
   { path: '/', name: 'Home', component: Home },
@@ -23,6 +24,7 @@ const routes = [
   { path: '/demos/cosmos', name: 'Cosmos', component: Cosmos },
   { path: '/demos/neural', name: 'Neural', component: Neural },
   { path: '/demos/wwii', name: 'WWII', component: WWII },
+  { path: '/wormhole', name: 'Wormhole', component: Wormhole },
 ]
 
 const router = createRouter({
