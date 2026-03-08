@@ -396,7 +396,7 @@ function animate() {
   starsOutside.geometry.attributes.position.needsUpdate = true
   starsOutside.geometry.attributes.color.needsUpdate = true
   starsOutside.material.uniforms.scrollSpeed.value = scrollSpeed
- s.warpIntensity.value = warpIntensity
+  starsOutside.material.uniforms.warpIntensity.value = warpIntensity
 
   // Update near stars
   const nearPos = starsNear.geometry.attributes.position.array
