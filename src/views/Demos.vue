@@ -4,6 +4,12 @@
     <p class="subtitle">Where ideas become interactive experiences</p>
 
     <div class="demos">
+      <router-link to="/demos/pirates" class="demo-card">
+        <div class="demo-icon">🏴‍☠️</div>
+        <h2>Pirates of the Burning Sea</h2>
+        <p>3D pirate ship simulation. Navigate with wind, fight naval ships, defeat the Kraken!</p>
+      </router-link>
+
       <router-link to="/demos/drums" class="demo-card">
         <div class="demo-icon">🥁</div>
         <h2>Cyber Drum Kit</h2>
