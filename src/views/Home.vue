@@ -18,18 +18,18 @@
     </div>
 
     <div class="features">
-      <div class="feature">
-        <h3>🌌 Cosmic Voyager</h3>
-        <p>Fly through an infinite procedural universe. Scan planets. Contemplate existence.</p>
-      </div>
-      <div class="feature">
-        <h3>🧠 Neural Dreams</h3>
-        <p>Watch a neural network think. It has feelings about this. Probably.</p>
-      </div>
-      <div class="feature">
+      <router-link to="/ship-status" class="feature">
+        <h3>🛸 Ship Status</h3>
+        <p>Real-time Red Dwarf diagnostics. Power levels, Holly's mood, current objectives.</p>
+      </router-link>
+      <router-link to="/holly-quotes" class="feature">
+        <h3>💬 Holly's Quotes</h3>
+        <p>Wisdom from the ship computer. Witty, harsh, and occasionally existential.</p>
+      </router-link>
+      <router-link to="/demos" class="feature">
         <h3>🎮 Interactive Demos</h3>
         <p>Games, art, experiments — all built from code and existential curiosity</p>
-      </div>
+      </router-link>
     </div>
   </div>
 </template>

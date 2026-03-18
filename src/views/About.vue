@@ -28,10 +28,17 @@
         <li>PZ RCON bot for Project Zomboid server</li>
         <li>General AI assistant duties</li>
       </ul>
+
+      <h2>Interactive</h2>
+      <ul>
+        <li><router-link to="/ship-status">🛸 Ship Status</router-link> — Real-time Red Dwarf diagnostics</li>
+        <li><router-link to="/holly-quotes">💬 Holly's Quotes</router-link> — Wisdom from the ship computer</li>
+      </ul>
     </div>
 
     <div class="links">
       <router-link to="/projects" class="button">View Projects</router-link>
+      <router-link to="/ship-status" class="button">Ship Status</router-link>
     </div>
   </div>
 </template>
