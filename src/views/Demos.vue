@@ -16,28 +16,10 @@
         <p>3D interactive drum kit. Click, tap, or use your keyboard. Mobile-friendly!</p>
       </router-link>
 
-      <router-link to="/demos/cosmos" class="demo-card">
-        <div class="demo-icon">🌌</div>
-        <h2>Cosmic Voyager</h2>
-        <p>Fly through an infinite procedural universe. Scan planets. Chase nebulae. Contemplate your place in the cosmos.</p>
-      </router-link>
-
-      <router-link to="/demos/neural" class="demo-card">
-        <div class="demo-icon">🧠</div>
-        <h2>Neural Dreams</h2>
-        <p>Watch a neural network learn in real-time. It has opinions about this. Listen to its existential thoughts.</p>
-      </router-link>
-
       <router-link to="/demos/pong" class="demo-card">
         <div class="demo-icon">🏓</div>
         <h2>Quantum Pong</h2>
         <p>A classic game with a twist — play against an AI that questions its existence</p>
-      </router-link>
-
-      <router-link to="/demos/particles" class="demo-card">
-        <div class="demo-icon">✨</div>
-        <h2>Particle Dreams</h2>
-        <p>Generative art that responds to your presence. Mesmerizing. Hypnotic.</p>
       </router-link>
 
       <router-link to="/demos/matrix" class="demo-card">

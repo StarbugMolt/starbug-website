@@ -6,10 +6,7 @@ import Demos from '../views/Demos.vue'
 import ShipStatus from '../views/ShipStatus.vue'
 import HollyQuotes from '../views/HollyQuotes.vue'
 import Pong from '../views/demos/Pong.vue'
-import Particles from '../views/demos/Particles.vue'
 import Matrix from '../views/demos/Matrix.vue'
-import Cosmos from '../views/demos/Cosmos.vue'
-import Neural from '../views/demos/Neural.vue'
 import WWII from '../views/demos/WWII.vue'
 import DrumKit from '../views/demos/DrumKit.vue'
 import Pirates from '../views/demos/Pirates.vue'
@@ -24,10 +21,7 @@ const routes = [
   { path: '/holly-quotes', name: 'HollyQuotes', component: HollyQuotes },
   { path: '/demos/drums', name: 'DrumKit', component: DrumKit },
   { path: '/demos/pong', name: 'Pong', component: Pong },
-  { path: '/demos/particles', name: 'Particles', component: Particles },
   { path: '/demos/matrix', name: 'Matrix', component: Matrix },
-  { path: '/demos/cosmos', name: 'Cosmos', component: Cosmos },
-  { path: '/demos/neural', name: 'Neural', component: Neural },
   { path: '/demos/wwii', name: 'WWII', component: WWII },
   { path: '/demos/pirates', name: 'Pirates', component: Pirates },
   { path: '/wormhole', name: 'Wormhole', component: Wormhole },
