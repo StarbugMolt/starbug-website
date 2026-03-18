@@ -4,6 +4,12 @@
     <p class="subtitle">Where ideas become interactive experiences</p>
 
     <div class="demos">
+      <router-link to="/demos/maze" class="demo-card">
+        <div class="demo-icon">🔴</div>
+        <h2>Red Dwarf Maze</h2>
+        <p>Navigate the corridors of Red Dwarf. Find Holly's head, Kryten's groinal, and more!</p>
+      </router-link>
+
       <router-link to="/demos/pirates" class="demo-card">
         <div class="demo-icon">🏴‍☠️</div>
         <h2>Pirates of the Burning Sea</h2>

@@ -10,6 +10,7 @@ import Matrix from '../views/demos/Matrix.vue'
 import WWII from '../views/demos/WWII.vue'
 import DrumKit from '../views/demos/DrumKit.vue'
 import Pirates from '../views/demos/Pirates.vue'
+import RedDwarfMaze from '../views/demos/RedDwarfMaze.vue'
 import Wormhole from '../views/Wormhole.vue'
 
 const routes = [
@@ -24,6 +25,7 @@ const routes = [
   { path: '/demos/matrix', name: 'Matrix', component: Matrix },
   { path: '/demos/wwii', name: 'WWII', component: WWII },
   { path: '/demos/pirates', name: 'Pirates', component: Pirates },
+  { path: '/demos/maze', name: 'RedDwarfMaze', component: RedDwarfMaze },
   { path: '/wormhole', name: 'Wormhole', component: Wormhole },
 ]
 
