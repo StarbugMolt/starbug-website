@@ -539,14 +539,15 @@ function startGame() {
 }
 
 function onKeyDown(e) {
-  const key = e.key.toLowerCase()
-  // Support WASD and ZQSD (AZERTY)
-  if (key === 'w' || key === 'z') keys.w = true
-  if (key === 'a' || key === 'q') keys.a = true
-  if (key === 's') keys.s = true
-  if (key === 'd') keys.d = true
+  // Use e.code for physical key position (works for both QWERTY and AZERTY)
+  const code = e.code
+  // WASD on QWERTY = ZQSD on AZERTY (same physical keys)
+  if (code === 'KeyW' || code === 'KeyZ') keys.w = true
+  if (code === 'KeyA' || code === 'KeyQ') keys.a = true
+  if (code === 'KeyS') keys.s = true
+  if (code === 'KeyD') keys.d = true
   
-  if (key === 'm' && gameState.value === 'playing') {
+  if (e.key.toLowerCase() === 'm' && gameState.value === 'playing') {
     showMinimap.value = !showMinimap.value
     if (showMinimap.value) {
       score.value = Math.max(0, score.value - 500)
@@ -556,12 +557,11 @@ function onKeyDown(e) {
 }
 
 function onKeyUp(e) {
-  const key = e.key.toLowerCase()
-  // Support WASD and ZQSD (AZERTY)
-  if (key === 'w' || key === 'z') keys.w = false
-  if (key === 'a' || key === 'q') keys.a = false
-  if (key === 's') keys.s = false
-  if (key === 'd') keys.d = false
+  const code = e.code
+  if (code === 'KeyW' || code === 'KeyZ') keys.w = false
+  if (code === 'KeyA' || code === 'KeyQ') keys.a = false
+  if (code === 'KeyS') keys.s = false
+  if (code === 'KeyD') keys.d = false
 }
 
 function onMouseMove(e) {
