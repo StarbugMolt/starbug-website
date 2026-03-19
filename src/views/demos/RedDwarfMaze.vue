@@ -18,8 +18,8 @@
       <div class="title">🔴 RED DWARF: THE MAZE</div>
       <p>Navigate the corridors of Red Dwarf. Find items. Don't get lost.</p>
       <div class="instructions">
-        <p>🎮 <strong>WASD</strong> - Move</p>
-        <p>🖱️ <strong>Mouse</strong> - Look around</p>
+        <p>🎮 <strong>WASD / ZQSD</strong> - Move</p>
+        <p>🖱️ <strong>Mouse</strong> - Look around (up/down/left/right)</p>
         <p>🔍 <strong>M</strong> - Toggle minimap (-500 pts)</p>
         <p>🎯 <strong>Find</strong> - Holly's head, Kryten's groinal, Lister's curry, and more!</p>
         <p>🏆 <strong>Goal</strong> - Find all items and reach the exit</p>
@@ -65,8 +65,9 @@ const quip = ref('')
 // Player
 let playerPos = new THREE.Vector3(2, 1.7, 2)
 let playerAngle = 0
+let playerPitch = 0 // For looking up/down
 const moveSpeed = 5
-const keys = { w: false, a: false, s: false, d: false }
+const keys = { w: false, a: false, s: false, d: false, z: false, q: false }
 
 // Maze
 const mazeSize = 25
@@ -130,10 +131,10 @@ function generateMaze() {
 }
 
 function init() {
-  // Scene
+  // Scene - brighter background
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x1a1a2e)
-  scene.fog = new THREE.Fog(0x1a1a2e, 5, 40)
+  scene.background = new THREE.Color(0x2a2a3e)
+  scene.fog = new THREE.Fog(0x2a2a3e, 8, 50)
 
   // Camera
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100)
@@ -145,15 +146,15 @@ function init() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.setClearColor(0x1a1a2e)
 
-  // Lighting - brighter ambient
-  const ambientLight = new THREE.AmbientLight(0x606080, 0.8)
+  // Lighting - MUCH brighter now
+  const ambientLight = new THREE.AmbientLight(0x9090a0, 1.5)
   scene.add(ambientLight)
 
-  // Add lights throughout the maze
-  for (let i = 0; i < 10; i++) {
+  // Add lights throughout the maze - brighter!
+  for (let i = 0; i < 15; i++) {
     const x = (i % 5) * 5 + 2
     const z = Math.floor(i / 5) * 8 + 2
-    const light = new THREE.PointLight(0xffffcc, 0.6, 12)
+    const light = new THREE.PointLight(0xffffcc, 1.2, 15)
     light.position.set(x, 2.8, z)
     scene.add(light)
     
@@ -165,8 +166,8 @@ function init() {
     scene.add(fixture)
   }
 
-  // Player light (flashlight) - attached to camera
-  const playerLight = new THREE.PointLight(0xffffff, 1, 20)
+  // Player light (flashlight) - brighter and further reach
+  const playerLight = new THREE.PointLight(0xffffff, 2, 30)
   playerLight.position.set(0, 0, 0)
   camera.add(playerLight)
   scene.add(camera)
@@ -494,7 +495,9 @@ function update(time) {
 
   // Update camera
   camera.position.copy(playerPos)
+  camera.rotation.order = 'YXZ' // Important for separate yaw/pitch
   camera.rotation.y = playerAngle
+  camera.rotation.x = playerPitch
 
   // Check collectibles
   checkCollectibles()
@@ -518,6 +521,7 @@ function startGame() {
   itemsFound.value = 0
   playerPos.set(2, 1.7, 2)
   playerAngle = 0
+  playerPitch = 0
   
   generateMaze()
   createMazeGeometry()
@@ -528,12 +532,19 @@ function startGame() {
     showHint.value = false
   }, 10000)
   
-  container.value.requestPointerLock()
+  // Request pointer lock
+  if (container.value) {
+    container.value.requestPointerLock()
+  }
 }
 
 function onKeyDown(e) {
   const key = e.key.toLowerCase()
-  if (key in keys) keys[key] = true
+  // Support WASD and ZQSD (AZERTY)
+  if (key === 'w' || key === 'z') keys.w = true
+  if (key === 'a' || key === 'q') keys.a = true
+  if (key === 's') keys.s = true
+  if (key === 'd') keys.d = true
   
   if (key === 'm' && gameState.value === 'playing') {
     showMinimap.value = !showMinimap.value
@@ -546,12 +557,19 @@ function onKeyDown(e) {
 
 function onKeyUp(e) {
   const key = e.key.toLowerCase()
-  if (key in keys) keys[key] = false
+  // Support WASD and ZQSD (AZERTY)
+  if (key === 'w' || key === 'z') keys.w = false
+  if (key === 'a' || key === 'q') keys.a = false
+  if (key === 's') keys.s = false
+  if (key === 'd') keys.d = false
 }
 
 function onMouseMove(e) {
   if (document.pointerLockElement === container.value && gameState.value === 'playing') {
     playerAngle -= e.movementX * 0.002
+    // Add vertical look (pitch) - clamped to avoid flipping
+    playerPitch -= e.movementY * 0.002
+    playerPitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, playerPitch))
   }
 }
 
