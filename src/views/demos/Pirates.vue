@@ -150,6 +150,7 @@ function init() {
   window.addEventListener('resize', onResize)
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('click', onClick)
+  window.addEventListener('mousedown', onMouseDown)
   window.addEventListener('contextmenu', onContextMenu)
   window.addEventListener('pointerlockchange', onPointerLockChange)
 }
@@ -677,8 +678,15 @@ function requestPointerLock() {
 }
 
 function onClick(e) {
+  // Request pointer lock on any click when playing
   if (gameState.value === 'playing') {
-    // Left click = port (left), Right click = starboard (right)
+    requestPointerLock()
+  }
+}
+
+function onMouseDown(e) {
+  if (gameState.value === 'playing') {
+    // Left click (button 0) = port (left), Right click (button 2) = starboard (right)
     if (e.button === 0) {
       fireCannon('port')
     } else if (e.button === 2) {
@@ -689,6 +697,10 @@ function onClick(e) {
 
 function onContextMenu(e) {
   e.preventDefault() // Prevent context menu on right click
+  // Right click also fires starboard cannons when playing
+  if (gameState.value === 'playing') {
+    fireCannon('starboard')
+  }
 }
 
 function onResize() {
@@ -1127,6 +1139,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('click', onClick)
+  window.removeEventListener('mousedown', onMouseDown)
   window.removeEventListener('contextmenu', onContextMenu)
   window.removeEventListener('pointerlockchange', onPointerLockChange)
   if (document.pointerLockElement) {
