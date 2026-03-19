@@ -11,7 +11,8 @@
         <div class="message" v-if="message">{{ message }}</div>
       </div>
       <div class="hud-right">
-        <div class="stat">💣 Cannon: {{ cannonCooldown > 0 ? cannonCooldown.toFixed(1) + 's' : 'READY' }}</div>
+        <div class="stat">💣 Port: {{ portCooldown > 0 ? portCooldown.toFixed(1) + 's' : 'READY' }}</div>
+        <div class="stat">💣 Stbd: {{ starboardCooldown > 0 ? starboardCooldown.toFixed(1) + 's' : 'READY' }}</div>
         <div class="stat">⚓ Target: {{ enemyShip.hp > 0 ? 'Enemy Ship' : (kraken.hp > 0 ? 'KRAKEN' : 'Victory!') }}</div>
       </div>
     </div>
@@ -19,7 +20,7 @@
     <canvas ref="canvas"></canvas>
 
     <div class="controls">
-      <div class="control-hint">🎯 Click to lock mouse | Move to steer | Click to fire broadsides | Avoid rocks & kraken!</div>
+      <div class="control-hint">🎯 Click to lock | Move mouse to steer | LMB=Port | RMB=Starboard | Avoid rocks!</div>
     </div>
 
     <div class="overlay" v-if="gameState === 'start'">
@@ -27,7 +28,8 @@
       <p>Navigate the Caribbean. Fight the navy. Survive the Kraken.</p>
       <div class="instructions">
         <p>🖱️ <strong>Mouse</strong> - Steer your ship</p>
-        <p>🖱️ <strong>Click</strong> - Fire cannons</p>
+        <p>🖱️ <strong>Left Click</strong> - Fire port (left)</p>
+        <p>🖱️ <strong>Right Click</strong> - Fire starboard (right)</p>
         <p>💨 <strong>Wind</strong> - Sail with the wind for speed, against it for control</p>
         <p>🪨 <strong>Avoid</strong> - Islands, rocks, and the Kraken</p>
         <p>⚔️ <strong>Defeat</strong> - The enemy ship, then face the Kraken</p>
@@ -60,7 +62,9 @@ const victory = ref(false)
 const hp = ref(100)
 const gold = ref(0)
 const message = ref('')
-const cannonCooldown = ref(0)
+const cannonCooldown = ref(0) // Both sides
+const portCooldown = ref(0) // Left side
+const starboardCooldown = ref(0) // Right side
 const playerSpeed = ref(0)
 
 // Ship state
@@ -146,6 +150,7 @@ function init() {
   window.addEventListener('resize', onResize)
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('click', onClick)
+  window.addEventListener('contextmenu', onContextMenu)
   window.addEventListener('pointerlockchange', onPointerLockChange)
 }
 
@@ -497,37 +502,49 @@ function createKraken() {
   showMessage('💀 THE KRAKEN AWAKENS!', 5000)
 }
 
-function fireCannon() {
-  if (cannonCooldown.value > 0) return
+function fireCannon(side) {
+  // side: 'port' (left), 'starboard' (right), or 'both'
+  const cooldownTime = 1.5
   
-  cannonCooldown.value = 1.5
+  if (side === 'port') {
+    if (portCooldown.value > 0) return
+    portCooldown.value = cooldownTime
+  } else if (side === 'starboard') {
+    if (starboardCooldown.value > 0) return
+    starboardCooldown.value = cooldownTime
+  } else {
+    if (cannonCooldown.value > 0) return
+    cannonCooldown.value = cooldownTime
+  }
   
-  // Fire from BOTH sides - 3 cannons per side (port and starboard)
   const angle = playerAngle
   
-  // Fire from 3 positions on each side: front, middle, back
-  const sidePositions = [-2, 0, 2] // z-offset positions
+  // Determine which side(s) to fire
+  let sidesToFire = []
+  if (side === 'port') sidesToFire = [-1] // Left
+  else if (side === 'starboard') sidesToFire = [1] // Right
+  else sidesToFire = [-1, 1] // Both
   
-  for (let side = -1; side <= 1; side += 2) {
+  for (const sideVal of sidesToFire) {
+    // Fire 3 cannons from this side
+    const sidePositions = [-2, 0, 2]
     for (const zOffset of sidePositions) {
       const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
       const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
       const ball = new THREE.Mesh(ballGeometry, ballMaterial)
       
-      // Fire from sides of the ship at different z positions
-      const sideOffset = side * 2 // Distance from center to side
+      const sideOffset = sideVal * 2
       ball.position.set(
-        playerPos.value.x + Math.sin(angle) * zOffset + Math.sin(angle + side * Math.PI / 2) * sideOffset,
+        playerPos.value.x + Math.sin(angle) * zOffset + Math.sin(angle + sideVal * Math.PI / 2) * sideOffset,
         2,
-        playerPos.value.z + Math.cos(angle) * zOffset + Math.cos(angle + side * Math.PI / 2) * sideOffset
+        playerPos.value.z + Math.cos(angle) * zOffset + Math.cos(angle + sideVal * Math.PI / 2) * sideOffset
       )
       
       const speed = 40
-      // Fire perpendicular to ship (outward from sides)
       cannonballs.push({
         mesh: ball,
-        vx: Math.sin(angle + side * Math.PI / 2) * speed,
-        vz: Math.cos(angle + side * Math.PI / 2) * speed,
+        vx: Math.sin(angle + sideVal * Math.PI / 2) * speed,
+        vz: Math.cos(angle + sideVal * Math.PI / 2) * speed,
         life: 3,
         isPlayer: true,
         spawnTime: Date.now()
@@ -537,7 +554,8 @@ function fireCannon() {
     }
   }
   
-  showMessage('💥 BROADSIDE FIRE!', 1000)
+  const sideName = side === 'port' ? 'PORT (LEFT)' : (side === 'starboard' ? 'STARBOARD (RIGHT)' : 'BROADSIDE')
+  showMessage(`💥 ${sideName} FIRE!`, 1000)
 }
 
 function fireEnemyCannon() {
@@ -634,23 +652,20 @@ function updateCannonballs(dt) {
   }
 }
 
-let mouseX = 0
+let mouseDeltaX = 0 // Track mouse movement for steering
 let pointerLocked = false
 
 function onMouseMove(e) {
   if (pointerLocked) {
-    // Use movementX for continuous rotation when pointer is locked - no clamping!
-    mouseX += e.movementX * 0.005
-    // Clamp to prevent going too far, but allow continuous turning
-    mouseX = Math.max(-2, Math.min(2, mouseX))
-  } else {
-    mouseX = (e.clientX / window.innerWidth) * 2 - 1
+    // Accumulate mouse movement for steering
+    mouseDeltaX += e.movementX * 0.003
   }
 }
 
 function onPointerLockChange() {
   pointerLocked = document.pointerLockElement === container.value
   if (pointerLocked) {
+    mouseDeltaX = 0 // Reset on lock
     showMessage('🎯 Pointer locked - move mouse to steer', 2000)
   }
 }
@@ -661,16 +676,19 @@ function requestPointerLock() {
   }
 }
 
-function onClick() {
+function onClick(e) {
   if (gameState.value === 'playing') {
-    // Fire cannon
-    fireCannon()
-    
-    // Re-acquire pointer lock if lost (clicking might release it)
-    if (container.value && !pointerLocked) {
-      container.value.requestPointerLock()
+    // Left click = port (left), Right click = starboard (right)
+    if (e.button === 0) {
+      fireCannon('port')
+    } else if (e.button === 2) {
+      fireCannon('starboard')
     }
   }
+}
+
+function onContextMenu(e) {
+  e.preventDefault() // Prevent context menu on right click
 }
 
 function onResize() {
@@ -825,19 +843,30 @@ function update(dt) {
   // Animate sails
   animateSails(dt)
   
-  // Player movement
-  const targetAngle = mouseX * Math.PI * 0.8
-  playerAngle += (targetAngle - playerAngle) * 2 * dt
+  // === GRADUAL STEERING WITH MOUSE ===
+  // Apply mouse delta to rotation (continuous turning when pointer locked)
+  if (pointerLocked) {
+    playerAngle += mouseDeltaX
+    // Decay the mouse delta (feels more natural)
+    mouseDeltaX *= 0.9
+  }
   
-  // Wind effect on speed - MUCH more noticeable now!
+  // === MOMENTUM-BASED SPEED PHYSICS ===
+  // Calculate target speed based on wind alignment
   const windDir = Math.cos(windAngle - playerAngle)
-  // With wind behind: fast (up to 20). Against wind: slow (down to 3)
-  const windBonus = windDir * windSpeed.value * 3
-  playerSpeed.value = Math.max(3, 12 + windBonus)
+  const maxSpeed = 15 // Maximum speed with perfect tailwind
+  const minSpeed = 2 // Minimum speed with headwind
+  const targetSpeed = minSpeed + (maxSpeed - minSpeed) * Math.max(0, (windDir + 1) / 2)
   
-  // Show wind speed indicator in HUD
-  const speedPercent = Math.round((playerSpeed.value / 20) * 100)
+  // Gradually accelerate/decelerate toward target speed (momentum)
+  const acceleration = 2.0 // How fast we change speed
+  if (playerSpeed.value < targetSpeed) {
+    playerSpeed.value = Math.min(targetSpeed, playerSpeed.value + acceleration * dt)
+  } else {
+    playerSpeed.value = Math.max(targetSpeed, playerSpeed.value - acceleration * 0.5 * dt)
+  }
   
+  // Apply momentum to position
   playerPos.value.x += Math.sin(playerAngle) * playerSpeed.value * dt
   playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
   
@@ -1031,10 +1060,10 @@ function update(dt) {
   // Update cannonballs
   updateCannonballs(dt)
   
-  // Cannon cooldown
-  if (cannonCooldown.value > 0) {
-    cannonCooldown.value -= dt
-  }
+  // Cannon cooldowns
+  if (cannonCooldown.value > 0) cannonCooldown.value -= dt
+  if (portCooldown.value > 0) portCooldown.value -= dt
+  if (starboardCooldown.value > 0) starboardCooldown.value -= dt
   
   // Animate ocean waves
   if (ocean) {
@@ -1057,12 +1086,14 @@ function startGame() {
     document.exitPointerLock()
   }
   pointerLocked = false
-  mouseX = 0
+  mouseDeltaX = 0
   
   // Reset
   hp.value = 100
   gold.value = 0
   cannonCooldown.value = 0
+  portCooldown.value = 0
+  starboardCooldown.value = 0
   playerPos.value = { x: 0, z: 0 }
   playerAngle = 0
   playerSpeed.value = 0
@@ -1096,6 +1127,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('click', onClick)
+  window.removeEventListener('contextmenu', onContextMenu)
   window.removeEventListener('pointerlockchange', onPointerLockChange)
   if (document.pointerLockElement) {
     document.exitPointerLock()
