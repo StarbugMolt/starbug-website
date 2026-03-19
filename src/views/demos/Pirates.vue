@@ -157,7 +157,7 @@ function init() {
 }
 
 function createOcean() {
-  const oceanGeometry = new THREE.PlaneGeometry(500, 500, 100, 100)
+  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 100, 100)
   const oceanMaterial = new THREE.MeshPhongMaterial({
     color: 0x006994,
     shininess: 100,
@@ -170,7 +170,7 @@ function createOcean() {
   scene.add(ocean)
 
   // Add waves
-  const waveGeometry = new THREE.PlaneGeometry(500, 500, 50, 50)
+  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 50, 50)
   const waveMaterial = new THREE.MeshPhongMaterial({
     color: 0x00aadd,
     transparent: true,
@@ -250,8 +250,8 @@ function createPlayerShip() {
   playerShip.add(foreMast)
 
   // === WHITE SAILS THAT REACT TO WIND ===
-  // Main sail - white, billows with wind
-  const sailGeometry = new THREE.PlaneGeometry(5, 7, 10, 14)
+  // Main sail - positioned forward, billows dramatically with wind
+  const sailGeometry = new THREE.PlaneGeometry(5, 7, 15, 20)
   const sailMaterial = new THREE.MeshPhongMaterial({ 
     color: 0xffffff, 
     side: THREE.DoubleSide,
@@ -259,14 +259,14 @@ function createPlayerShip() {
     opacity: 0.95
   })
   const sail = new THREE.Mesh(sailGeometry, sailMaterial)
-  sail.position.set(0, 8, 0)
+  sail.position.set(0, 8, -1.5) // Moved forward slightly
   sail.rotation.y = Math.PI / 2
   sail.userData.isSail = true
   sail.userData.originalVertices = sailGeometry.attributes.position.array.slice()
   playerShip.add(sail)
 
-  // Fore sail (front jib) - white
-  const foreSailGeometry = new THREE.PlaneGeometry(3, 4, 6, 8)
+  // Fore sail (front jib) - white, more forward
+  const foreSailGeometry = new THREE.PlaneGeometry(3, 4, 10, 12)
   const foreSailMaterial = new THREE.MeshPhongMaterial({ 
     color: 0xffffff, 
     side: THREE.DoubleSide,
@@ -274,14 +274,14 @@ function createPlayerShip() {
     opacity: 0.95
   })
   const foreSail = new THREE.Mesh(foreSailGeometry, foreSailMaterial)
-  foreSail.position.set(0, 5, -2)
+  foreSail.position.set(0, 5, -3) // Moved forward
   foreSail.rotation.y = Math.PI / 2
   foreSail.userData.isSail = true
   foreSail.userData.originalVertices = foreSailGeometry.attributes.position.array.slice()
   playerShip.add(foreSail)
 
   // Mizzen sail (back) - white
-  const mizzenGeometry = new THREE.PlaneGeometry(2.5, 3.5, 6, 8)
+  const mizzenGeometry = new THREE.PlaneGeometry(2.5, 3.5, 8, 10)
   const mizzenMaterial = new THREE.MeshPhongMaterial({ 
     color: 0xffffff, 
     side: THREE.DoubleSide,
@@ -289,7 +289,7 @@ function createPlayerShip() {
     opacity: 0.95
   })
   const mizzen = new THREE.Mesh(mizzenGeometry, mizzenMaterial)
-  mizzen.position.set(0, 6, 2.5)
+  mizzen.position.set(0, 6, 1) // Moved slightly forward from back
   mizzen.rotation.y = Math.PI / 2
   mizzen.userData.isSail = true
   mizzen.userData.originalVertices = mizzenGeometry.attributes.position.array.slice()
@@ -345,17 +345,17 @@ function createPlayerShip() {
 }
 
 function createIslands() {
-  // Create 5 islands
-  for (let i = 0; i < 5; i++) {
+  // Create 10 islands (more for bigger map)
+  for (let i = 0; i < 10; i++) {
     const islandGroup = new THREE.Group()
     
-    const angle = (i / 5) * Math.PI * 2
-    const dist = 80 + Math.random() * 60
+    const angle = (i / 10) * Math.PI * 2
+    const dist = 200 + Math.random() * 250 // Farther out
     const x = Math.cos(angle) * dist
     const z = Math.sin(angle) * dist
     
     // Sand
-    const sandGeometry = new THREE.ConeGeometry(8 + Math.random() * 5, 4, 8)
+    const sandGeometry = new THREE.ConeGeometry(12 + Math.random() * 8, 6, 8)
     const sandMaterial = new THREE.MeshPhongMaterial({ color: 0xF4A460 })
     const sand = new THREE.Mesh(sandGeometry, sandMaterial)
     sand.position.y = 1
@@ -375,18 +375,18 @@ function createIslands() {
     islandGroup.add(leaves)
     
     islandGroup.position.set(x, 0, z)
-    islands.push({ x, z, radius: 10, mesh: islandGroup })
+    islands.push({ x, z, radius: 15, mesh: islandGroup })
     scene.add(islandGroup)
   }
   
-  // Create rocks
-  for (let i = 0; i < 15; i++) {
+  // Create rocks - scattered throughout larger area
+  for (let i = 0; i < 30; i++) {
     const rockGeometry = new THREE.DodecahedronGeometry(1 + Math.random() * 2)
     const rockMaterial = new THREE.MeshPhongMaterial({ color: 0x696969 })
     const rock = new THREE.Mesh(rockGeometry, rockMaterial)
     
     const angle = Math.random() * Math.PI * 2
-    const dist = 20 + Math.random() * 100
+    const dist = 50 + Math.random() * 400
     rock.position.set(
       Math.cos(angle) * dist,
       0.5,
@@ -656,12 +656,22 @@ function updateCannonballs(dt) {
 
 let mouseDeltaX = 0 // Track mouse movement for steering
 
+let turnAccumulator = 0 // Clamp total accumulated turn
+
 function onMouseMove(e) {
   // Always accumulate mouse movement when game is playing
   // This works because pointer lock captures all mouse movement
   if (gameState.value === 'playing') {
     // Very low sensitivity for big ship feel
-    mouseDeltaX += e.movementX * 0.0003
+    const turnInput = e.movementX * 0.0003
+    
+    // Clamp the accumulated turn to maintain sluggish feel
+    // Can't push past this limit no matter how far you move mouse
+    const maxTurnDelta = 0.008 // Max turn per frame
+    turnAccumulator += turnInput
+    turnAccumulator = Math.max(-maxTurnDelta, Math.min(maxTurnDelta, turnAccumulator))
+    
+    mouseDeltaX = turnAccumulator
   }
 }
 
@@ -730,8 +740,12 @@ function animateSails(dt) {
   
   // Calculate how aligned we are with wind (1 = perfect tailwind, -1 = perfect headwind)
   const windAlignment = Math.cos(windAngle - playerAngle)
+  // Positive = wind behind, Negative = wind in front
+  const windBehind = Math.max(0, windAlignment) // 1 when wind behind, 0 when in front
+  const windAhead = Math.max(0, -windAlignment) // 1 when wind in front, 0 when behind
+  
   // More billowing when going fast with wind, less when slow/against wind
-  const speedFactor = playerSpeed.value / 20 // 0 to 1 based on speed
+  const speedFactor = playerSpeed.value / 15 // 0 to 1 based on speed
   
   playerShip.userData.sails.forEach((sail, index) => {
     if (!sail.userData.originalVertices) return
@@ -740,18 +754,29 @@ function animateSails(dt) {
     const original = sail.userData.originalVertices
     
     for (let i = 0; i < positions.count; i++) {
-      const x = original[i * 3]
-      const y = original[i * 3 + 1]
+      const x = original[i * 3] // Horizontal position from center of sail
+      const y = original[i * 3 + 1] // Vertical position
       
-      // Billowing effect - more when going fast with wind, less when slow
-      const baseBillow = windStrength * (0.5 + speedFactor * 0.5)
-      const bulge = Math.abs(x) / 2.5 * baseBillow
+      // x ranges from -width/2 to +width/2
+      // We want the sail to billow OUTWARD from the mast (which is at x=0)
+      // So we use abs(x) to make both sides billow outward
       
-      // Flapping when against wind or slow, smooth billowing when fast with wind
-      const flapAmount = windAlignment < 0.3 ? 0.4 : 0.15
-      const wave = Math.sin(time * 3 + y * 0.5 + index) * flapAmount * (1 - speedFactor * 0.5)
+      const distFromMast = Math.abs(x) / 2.5 // Normalized distance from mast
       
-      positions.array[i * 3 + 2] = bulge + wave
+      // === WIND BEHIND = FULL BELLY, CURVED SHAPE ===
+      // Maximum billow when wind is behind and we're moving fast
+      const maxBillow = windBehind * windStrength * (1.2 + speedFactor * 0.8)
+      // Curved billow - more at center, less at edges (parabolic) - MORE DRAMATIC
+      const curvedBillow = distFromMast * maxBillow * (1.5 - distFromMast * 0.5)
+      
+      // === WIND IN FRONT = FLUTTER, ALMOST NO VOLUME ===
+      // Sails luff and flutter when wind is against - very little billow
+      const flutterAmount = windAhead * 0.2 * (0.3 + speedFactor * 0.3)
+      const flutter = Math.sin(time * 8 + y * 0.8 + index * 2) * flutterAmount
+      
+      // Combine: curved billow when going with wind, flutter when against
+      // When going across wind, intermediate behavior
+      positions.array[i * 3 + 2] = curvedBillow + flutter
     }
     
     positions.needsUpdate = true
@@ -900,7 +925,7 @@ function update(dt) {
   playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
   
   // Boundary
-  const maxDist = 150
+  const maxDist = 600
   if (Math.sqrt(playerPos.value.x ** 2 + playerPos.value.z ** 2) > maxDist) {
     const angle = Math.atan2(playerPos.value.x, playerPos.value.z)
     playerPos.value.x = Math.sin(angle) * maxDist
@@ -994,7 +1019,7 @@ function update(dt) {
     enemyShip.value.z += Math.cos(enemyShip.value.angle) * enemySpeed * dt
     
     // Keep in bounds
-    const maxDist = 140
+    const maxDist = 550
     if (Math.sqrt(enemyShip.value.x ** 2 + enemyShip.value.z ** 2) > maxDist) {
       const angle = Math.atan2(enemyShip.value.x, enemyShip.value.z)
       enemyShip.value.x = Math.sin(angle) * maxDist
@@ -1115,6 +1140,7 @@ function startGame() {
     document.exitPointerLock()
   }
   mouseDeltaX = 0
+  turnAccumulator = 0
   targetRotation = 0
   
   // Reset
@@ -1128,7 +1154,7 @@ function startGame() {
   targetRotation = 0
   playerSpeed.value = 0
   
-  enemyShip.value = { x: 100, z: -100, hp: 100, angle: 0 }
+  enemyShip.value = { x: 250, z: -250, hp: 100, angle: 0 }
   spawnEnemyShip()
   
   if (krakenMesh) {
