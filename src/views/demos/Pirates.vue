@@ -5,6 +5,7 @@
         <div class="stat">🏴‍☠️ HP: {{ hp }}/100</div>
         <div class="stat">💰 Gold: {{ gold }}</div>
         <div class="stat">💨 Wind: {{ windDirection }} {{ windSpeed.toFixed(1) }} kn</div>
+        <div class="stat">⚓ Speed: {{ playerSpeed?.toFixed(1) || '0' }} kn</div>
       </div>
       <div class="hud-center">
         <div class="message" v-if="message">{{ message }}</div>
@@ -18,7 +19,7 @@
     <canvas ref="canvas"></canvas>
 
     <div class="controls">
-      <div class="control-hint">🖱️ Mouse to steer | Click to fire cannon | Avoid rocks & kraken!</div>
+      <div class="control-hint">🎯 Click to lock mouse | Move to steer | Click to fire broadsides | Avoid rocks & kraken!</div>
     </div>
 
     <div class="overlay" v-if="gameState === 'start'">
@@ -60,12 +61,12 @@ const hp = ref(100)
 const gold = ref(0)
 const message = ref('')
 const cannonCooldown = ref(0)
+const playerSpeed = ref(0)
 
 // Ship state
 let playerShip
 const playerPos = ref({ x: 0, z: 0 })
 let playerAngle = 0
-let playerSpeed = 0
 
 // Wind
 let windAngle = 0
@@ -142,6 +143,7 @@ function init() {
   window.addEventListener('resize', onResize)
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('click', onClick)
+  window.addEventListener('pointerlockchange', onPointerLockChange)
 }
 
 function createOcean() {
@@ -224,30 +226,69 @@ function createPlayerShip() {
   deck.position.y = 2.2
   playerShip.add(deck)
 
-  // Mast
+  // Main mast
   const mastGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10)
   const mastMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 })
   const mast = new THREE.Mesh(mastGeometry, mastMaterial)
   mast.position.y = 7
   playerShip.add(mast)
 
-  // Sail - RED for pirate ship!
-  const sailGeometry = new THREE.PlaneGeometry(5, 7)
-  const sailMaterial = new THREE.MeshPhongMaterial({ color: 0x8B0000, side: THREE.DoubleSide })
+  // Fore mast (front)
+  const foreMastGeometry = new THREE.CylinderGeometry(0.15, 0.15, 6)
+  const foreMast = new THREE.Mesh(foreMastGeometry, mastMaterial)
+  foreMast.position.set(0, 5, -2.5)
+  playerShip.add(foreMast)
+
+  // === WHITE SAILS THAT REACT TO WIND ===
+  // Main sail - white, billows with wind
+  const sailGeometry = new THREE.PlaneGeometry(5, 7, 10, 14)
+  const sailMaterial = new THREE.MeshPhongMaterial({ 
+    color: 0xffffff, 
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95
+  })
   const sail = new THREE.Mesh(sailGeometry, sailMaterial)
   sail.position.set(0, 8, 0)
   sail.rotation.y = Math.PI / 2
+  sail.userData.isSail = true
+  sail.userData.originalVertices = sailGeometry.attributes.position.array.slice()
   playerShip.add(sail)
 
-  // Second smaller sail (jib)
-  const jibGeometry = new THREE.PlaneGeometry(3, 4)
-  const jibMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide })
-  const jib = new THREE.Mesh(jibGeometry, jibMaterial)
-  jib.position.set(0, 5, -2)
-  jib.rotation.y = Math.PI / 2
-  playerShip.add(jib)
+  // Fore sail (front jib) - white
+  const foreSailGeometry = new THREE.PlaneGeometry(3, 4, 6, 8)
+  const foreSailMaterial = new THREE.MeshPhongMaterial({ 
+    color: 0xffffff, 
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95
+  })
+  const foreSail = new THREE.Mesh(foreSailGeometry, foreSailMaterial)
+  foreSail.position.set(0, 5, -2)
+  foreSail.rotation.y = Math.PI / 2
+  foreSail.userData.isSail = true
+  foreSail.userData.originalVertices = foreSailGeometry.attributes.position.array.slice()
+  playerShip.add(foreSail)
 
-  // Flag
+  // Mizzen sail (back) - white
+  const mizzenGeometry = new THREE.PlaneGeometry(2.5, 3.5, 6, 8)
+  const mizzenMaterial = new THREE.MeshPhongMaterial({ 
+    color: 0xffffff, 
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95
+  })
+  const mizzen = new THREE.Mesh(mizzenGeometry, mizzenMaterial)
+  mizzen.position.set(0, 6, 2.5)
+  mizzen.rotation.y = Math.PI / 2
+  mizzen.userData.isSail = true
+  mizzen.userData.originalVertices = mizzenGeometry.attributes.position.array.slice()
+  playerShip.add(mizzen)
+
+  // Store sails for wind animation
+  playerShip.userData.sails = [sail, foreSail, mizzen]
+
+  // Pirate flag
   const flagGeometry = new THREE.PlaneGeometry(1.5, 1)
   const flagMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
   const flag = new THREE.Mesh(flagGeometry, flagMaterial)
@@ -255,7 +296,7 @@ function createPlayerShip() {
   flag.rotation.y = Math.PI / 2
   playerShip.add(flag)
 
-  // Cannon ports - now including bow (front) cannons
+  // Cannon ports - left side
   for (let i = -1; i <= 1; i++) {
     const portGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.3)
     const portMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
@@ -270,11 +311,10 @@ function createPlayerShip() {
     playerShip.add(portR)
   }
   
-  // Side cannons (port and starboard)
+  // Side cannons (port) - 3 cannons
   const sideCannonGeom = new THREE.CylinderGeometry(0.15, 0.2, 1.2)
   const sideCannonMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
   
-  // Port side cannons
   for (let i = -1; i <= 1; i++) {
     const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
     cannon.position.set(-1.6, 1.8, i * 2)
@@ -282,16 +322,12 @@ function createPlayerShip() {
     playerShip.add(cannon)
   }
   
-  // Starboard side cannons
+  // Starboard side cannons - 3 cannons
   for (let i = -1; i <= 1; i++) {
     const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
     cannon.position.set(1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
     playerShip.add(cannon)
-  }
-    portR.position.set(1.5, 1.5, i * 2)
-    portR.rotation.z = Math.PI / 2
-    playerShip.add(portR)
   }
 
   playerShip.position.set(0, 0, 0)
@@ -365,15 +401,43 @@ function spawnEnemyShip() {
   hull.position.y = 1.5
   enemyShipMesh.add(hull)
   
-  // White sail
-  const sailGeometry = new THREE.PlaneGeometry(6, 8)
-  const sailMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+  // Main mast
+  const mastGeometry = new THREE.CylinderGeometry(0.25, 0.25, 12)
+  const mastMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 })
+  const mast = new THREE.Mesh(mastGeometry, mastMaterial)
+  mast.position.y = 8
+  enemyShipMesh.add(mast)
+  
+  // Fore mast
+  const foreMastGeometry = new THREE.CylinderGeometry(0.2, 0.2, 7)
+  const foreMast = new THREE.Mesh(foreMastGeometry, mastMaterial)
+  foreMast.position.set(0, 6, -3)
+  enemyShipMesh.add(foreMast)
+  
+  // White sails (navy ships have white sails)
+  const sailGeometry = new THREE.PlaneGeometry(6, 8, 10, 14)
+  const sailMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
   const sail = new THREE.Mesh(sailGeometry, sailMaterial)
   sail.position.set(0, 9, 0)
   sail.rotation.y = Math.PI / 2
+  sail.userData.isSail = true
+  sail.userData.originalVertices = sailGeometry.attributes.position.array.slice()
   enemyShipMesh.add(sail)
   
-  // Flag
+  // Fore sail
+  const foreSailGeometry = new THREE.PlaneGeometry(3.5, 4.5, 6, 8)
+  const foreSailMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
+  const foreSail = new THREE.Mesh(foreSailGeometry, foreSailMaterial)
+  foreSail.position.set(0, 6, -2.5)
+  foreSail.rotation.y = Math.PI / 2
+  foreSail.userData.isSail = true
+  foreSail.userData.originalVertices = foreSailGeometry.attributes.position.array.slice()
+  enemyShipMesh.add(foreSail)
+  
+  // Store sails for animation
+  enemyShipMesh.userData.sails = [sail, foreSail]
+  
+  // Flag - British Union Jack
   const flagGeometry = new THREE.PlaneGeometry(2, 1.5)
   const flagMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff })
   const flag = new THREE.Mesh(flagGeometry, flagMaterial)
@@ -435,30 +499,67 @@ function fireCannon() {
   
   cannonCooldown.value = 1.5
   
-  // Fire from BOTH sides (port and starboard)
+  // Fire from BOTH sides - 3 cannons per side (port and starboard)
   const angle = playerAngle
   
-  // Create two cannonballs - one from each side
+  // Fire from 3 positions on each side: front, middle, back
+  const sidePositions = [-2, 0, 2] // z-offset positions
+  
   for (let side = -1; side <= 1; side += 2) {
-    const ballGeometry = new THREE.SphereGeometry(0.4, 8, 8)
+    for (const zOffset of sidePositions) {
+      const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
+      const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
+      const ball = new THREE.Mesh(ballGeometry, ballMaterial)
+      
+      // Fire from sides of the ship at different z positions
+      const sideOffset = side * 2 // Distance from center to side
+      ball.position.set(
+        playerPos.value.x + Math.sin(angle) * zOffset + Math.sin(angle + side * Math.PI / 2) * sideOffset,
+        2,
+        playerPos.value.z + Math.cos(angle) * zOffset + Math.cos(angle + side * Math.PI / 2) * sideOffset
+      )
+      
+      const speed = 40
+      // Fire perpendicular to ship (outward from sides)
+      cannonballs.push({
+        mesh: ball,
+        vx: Math.sin(angle + side * Math.PI / 2) * speed,
+        vz: Math.cos(angle + side * Math.PI / 2) * speed,
+        life: 3
+      })
+      
+      scene.add(ball)
+    }
+  }
+  
+  showMessage('💥 BROADSIDE FIRE!', 1000)
+}
+
+function fireEnemyCannon() {
+  if (enemyShip.value.hp <= 0) return
+  
+  const angle = enemyShip.value.angle
+  
+  // Fire from both sides
+  for (let side = -1; side <= 1; side += 2) {
+    const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
     const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
     const ball = new THREE.Mesh(ballGeometry, ballMaterial)
     
-    // Fire from sides of the ship
-    const sideOffset = side * 2 // Distance from center to side
+    const sideOffset = side * 2
     ball.position.set(
-      playerPos.value.x + Math.sin(angle) * sideOffset,
+      enemyShip.value.x + Math.sin(angle) * sideOffset,
       2,
-      playerPos.value.z + Math.cos(angle) * sideOffset
+      enemyShip.value.z + Math.cos(angle) * sideOffset
     )
     
-    const speed = 35
-    // Fire perpendicular to ship (outward from sides)
+    const speed = 30
     cannonballs.push({
       mesh: ball,
       vx: Math.sin(angle + side * Math.PI / 2) * speed,
       vz: Math.cos(angle + side * Math.PI / 2) * speed,
-      life: 3
+      life: 3,
+      isEnemy: true
     })
     
     scene.add(ball)
@@ -502,7 +603,7 @@ function updateCannonballs(dt) {
       }
     }
     
-    // Check collision with player
+    // Check collision with player (from both player and enemy cannons)
     const pdx = ball.mesh.position.x - playerPos.value.x
     const pdz = ball.mesh.position.z - playerPos.value.z
     if (Math.sqrt(pdx * pdx + pdz * pdz) < 3) {
@@ -524,13 +625,37 @@ function updateCannonballs(dt) {
 }
 
 let mouseX = 0
+let pointerLocked = false
 
 function onMouseMove(e) {
-  mouseX = (e.clientX / window.innerWidth) * 2 - 1
+  if (pointerLocked) {
+    // Use movementX for continuous rotation when pointer is locked
+    mouseX += e.movementX * 0.005
+    mouseX = Math.max(-1, Math.min(1, mouseX))
+  } else {
+    mouseX = (e.clientX / window.innerWidth) * 2 - 1
+  }
+}
+
+function onPointerLockChange() {
+  pointerLocked = document.pointerLockElement === container.value
+  if (pointerLocked) {
+    showMessage('🎯 Pointer locked - move mouse to steer', 2000)
+  }
+}
+
+function requestPointerLock() {
+  if (container.value && !pointerLocked) {
+    container.value.requestPointerLock()
+  }
 }
 
 function onClick() {
   if (gameState.value === 'playing') {
+    // Request pointer lock on first click if not locked
+    if (!pointerLocked && container.value) {
+      requestPointerLock()
+    }
     fireCannon()
   }
 }
@@ -547,6 +672,57 @@ function getWindDirection() {
   return dirs[idx]
 }
 
+// Animate sails based on wind
+function animateSails(dt) {
+  if (!playerShip || !playerShip.userData.sails) return
+  
+  const time = Date.now() * 0.001
+  const windStrength = windSpeed.value / 6 // Normalize 0-1
+  
+  playerShip.userData.sails.forEach((sail, index) => {
+    if (!sail.userData.originalVertices) return
+    
+    const positions = sail.geometry.attributes.position
+    const original = sail.userData.originalVertices
+    
+    for (let i = 0; i < positions.count; i++) {
+      const x = original[i * 3]
+      const y = original[i * 3 + 1]
+      
+      // Billowing effect - center of sail bulges out more
+      const bulge = Math.abs(x) / 2.5 * windStrength
+      const wave = Math.sin(time * 3 + y * 0.5 + index) * 0.3 * windStrength
+      
+      positions.array[i * 3 + 2] = bulge + wave
+    }
+    
+    positions.needsUpdate = true
+  })
+}
+
+// Check if a position would collide with obstacles
+function checkObstacleCollision(x, z, radius) {
+  // Check islands
+  for (const island of islands) {
+    const dx = x - island.x
+    const dz = z - island.z
+    if (Math.sqrt(dx * dx + dz * dz) < island.radius + radius) {
+      return true
+    }
+  }
+  
+  // Check rocks
+  for (const rock of rocks) {
+    const dx = x - rock.x
+    const dz = z - rock.z
+    if (Math.sqrt(dx * dx + dz * dz) < rock.radius + radius) {
+      return true
+    }
+  }
+  
+  return false
+}
+
 function update(dt) {
   if (gameState.value !== 'playing') return
   
@@ -556,19 +732,27 @@ function update(dt) {
     windAngle += (Math.random() - 0.5) * 0.5
     windSpeed.value = 2 + Math.random() * 4
     windChangeTimer = 5 + Math.random() * 5
+    showMessage(`💨 Wind shifted to ${getWindDirection()}!`, 2000)
   }
+  
+  // Animate sails
+  animateSails(dt)
   
   // Player movement
   const targetAngle = mouseX * Math.PI * 0.8
   playerAngle += (targetAngle - playerAngle) * 2 * dt
   
-  // Wind effect on speed
+  // Wind effect on speed - MUCH more noticeable now!
   const windDir = Math.cos(windAngle - playerAngle)
-  const windBonus = windDir > 0 ? windDir * windSpeed.value * 0.5 : windDir * windSpeed.value * 0.2
-  playerSpeed = 8 + windBonus
+  // With wind behind: fast (up to 20). Against wind: slow (down to 3)
+  const windBonus = windDir * windSpeed.value * 3
+  playerSpeed.value = Math.max(3, 12 + windBonus)
   
-  playerPos.value.x += Math.sin(playerAngle) * playerSpeed * dt
-  playerPos.value.z += Math.cos(playerAngle) * playerSpeed * dt
+  // Show wind speed indicator in HUD
+  const speedPercent = Math.round((playerSpeed.value / 20) * 100)
+  
+  playerPos.value.x += Math.sin(playerAngle) * playerSpeed.value * dt
+  playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
   
   // Boundary
   const maxDist = 150
@@ -614,27 +798,105 @@ function update(dt) {
     gameState.value = 'gameover'
   }
   
-  // Enemy ship AI
+  // Enemy ship AI - with obstacle avoidance and intelligence
   if (enemyShip.value.hp > 0) {
-    // Move toward player
+    // Calculate direction to player
     const dx = playerPos.value.x - enemyShip.value.x
     const dz = playerPos.value.z - enemyShip.value.z
+    const distToPlayer = Math.sqrt(dx * dx + dz * dz)
     const targetAngle = Math.atan2(dx, dz)
-    enemyShip.value.angle += (targetAngle - enemyShip.value.angle) * dt
     
-    enemyShip.value.x += Math.sin(enemyShip.value.angle) * 6 * dt
-    enemyShip.value.z += Math.cos(enemyShip.value.angle) * 6 * dt
+    // Check for obstacles ahead
+    const lookAheadX = enemyShip.value.x + Math.sin(enemyShip.value.angle) * 15
+    const lookAheadZ = enemyShip.value.z + Math.cos(enemyShip.value.angle) * 15
+    const obstacleAhead = checkObstacleCollision(lookAheadX, lookAheadZ, 5)
     
+    let moveAngle = targetAngle
+    
+    // If obstacle ahead, try to steer around it
+    if (obstacleAhead) {
+      // Turn left or right to avoid
+      const leftCheck = checkObstacleCollision(
+        enemyShip.value.x + Math.sin(enemyShip.value.angle + 0.5) * 10,
+        enemyShip.value.z + Math.cos(enemyShip.value.angle + 0.5) * 10,
+        5
+      )
+      const rightCheck = checkObstacleCollision(
+        enemyShip.value.x + Math.sin(enemyShip.value.angle - 0.5) * 10,
+        enemyShip.value.z + Math.cos(enemyShip.value.angle - 0.5) * 10,
+        5
+      )
+      
+      if (!leftCheck && rightCheck) {
+        moveAngle = enemyShip.value.angle + 0.8 * dt // Turn left
+      } else if (!rightCheck && leftCheck) {
+        moveAngle = enemyShip.value.angle - 0.8 * dt // Turn right
+      } else if (!leftCheck && !rightCheck) {
+        // Both clear, pick random
+        moveAngle = enemyShip.value.angle + (Math.random() > 0.5 ? 0.8 : -0.8) * dt
+      } else {
+        // Full reverse
+        moveAngle = enemyShip.value.angle + Math.PI
+      }
+    }
+    
+    // Smoothly turn toward target
+    enemyShip.value.angle += (moveAngle - enemyShip.value.angle) * dt * 2
+    
+    // Move at variable speed
+    const enemySpeed = obstacleAhead ? 3 : 6
+    enemyShip.value.x += Math.sin(enemyShip.value.angle) * enemySpeed * dt
+    enemyShip.value.z += Math.cos(enemyShip.value.angle) * enemySpeed * dt
+    
+    // Keep in bounds
+    const maxDist = 140
+    if (Math.sqrt(enemyShip.value.x ** 2 + enemyShip.value.z ** 2) > maxDist) {
+      const angle = Math.atan2(enemyShip.value.x, enemyShip.value.z)
+      enemyShip.value.x = Math.sin(angle) * maxDist
+      enemyShip.value.z = Math.cos(angle) * maxDist
+    }
+    
+    // Update mesh
     enemyShipMesh.position.x = enemyShip.value.x
     enemyShipMesh.position.z = enemyShip.value.z
     enemyShipMesh.rotation.y = enemyShip.value.angle
     
+    // Animate enemy sails
+    if (enemyShipMesh.userData.sails) {
+      const time = Date.now() * 0.001
+      enemyShipMesh.userData.sails.forEach((sail, index) => {
+        if (!sail.userData.originalVertices) return
+        const positions = sail.geometry.attributes.position
+        const original = sail.userData.originalVertices
+        const windStrength = windSpeed.value / 6
+        for (let i = 0; i < positions.count; i++) {
+          const x = original[i * 3]
+          const y = original[i * 3 + 1]
+          const bulge = Math.abs(x) / 3 * windStrength
+          const wave = Math.sin(time * 2.5 + y * 0.5 + index) * 0.25 * windStrength
+          positions.array[i * 3 + 2] = bulge + wave
+        }
+        positions.needsUpdate = true
+      })
+    }
+    
     // Collision with player
     const edx = playerPos.value.x - enemyShip.value.x
     const edz = playerPos.value.z - enemyShip.value.z
-    if (Math.sqrt(edx * edx + edz * edz) < 6) {
+    const enemyDist = Math.sqrt(edx * edx + edz * edz)
+    
+    if (enemyDist < 6) {
       hp.value -= 10 * dt
-      showMessage('⚔️ Rammed by enemy!')
+      // Bounce back
+      enemyShip.value.x -= Math.sin(enemyShip.value.angle) * 2
+      enemyShip.value.z -= Math.cos(enemyShip.value.angle) * 2
+      enemyShip.value.hp -= 5 // Enemy also takes damage from collision
+      showMessage('⚔️ Collision with enemy!')
+    }
+    
+    // Enemy fires back occasionally
+    if (Math.random() < 0.02 && distToPlayer < 30) {
+      fireEnemyCannon()
     }
   } else if (enemyShipMesh) {
     // Sunk!
@@ -703,12 +965,20 @@ function animate() {
 }
 
 function startGame() {
+  // Exit pointer lock if active
+  if (document.pointerLockElement) {
+    document.exitPointerLock()
+  }
+  pointerLocked = false
+  mouseX = 0
+  
   // Reset
   hp.value = 100
   gold.value = 0
   cannonCooldown.value = 0
   playerPos.value = { x: 0, z: 0 }
   playerAngle = 0
+  playerSpeed.value = 0
   
   enemyShip.value = { x: 100, z: -100, hp: 100, angle: 0 }
   spawnEnemyShip()
@@ -739,6 +1009,10 @@ onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('click', onClick)
+  window.removeEventListener('pointerlockchange', onPointerLockChange)
+  if (document.pointerLockElement) {
+    document.exitPointerLock()
+  }
 })
 </script>
 
