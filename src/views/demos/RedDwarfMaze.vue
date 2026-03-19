@@ -91,6 +91,198 @@ const collectibleData = [
 let textSprites = []
 let quipTimeout = null
 
+// Procedural texture generation
+function createFloorTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext('2d')
+  
+  // Base color - dark metallic
+  ctx.fillStyle = '#2a2a30'
+  ctx.fillRect(0, 0, 512, 512)
+  
+  // Metal grate pattern
+  const gridSize = 64
+  for (let x = 0; x < 512; x += gridSize) {
+    for (let y = 0; y < 512; y += gridSize) {
+      // Grate holes
+      ctx.fillStyle = '#1a1a1f'
+      ctx.fillRect(x + 8, y + 8, gridSize - 16, gridSize - 16)
+      
+      // Grate bars
+      ctx.strokeStyle = '#3a3a42'
+      ctx.lineWidth = 3
+      ctx.strokeRect(x + 4, y + 4, gridSize - 8, gridSize - 8)
+      
+      // Center cross bar
+      ctx.strokeStyle = '#4a4a52'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(x + gridSize/2, y + 8)
+      ctx.lineTo(x + gridSize/2, y + gridSize - 8)
+      ctx.moveTo(x + 8, y + gridSize/2)
+      ctx.lineTo(x + gridSize - 8, y + gridSize/2)
+      ctx.stroke()
+      
+      // Corner bolts
+      ctx.fillStyle = '#5a5a62'
+      const boltPositions = [x + 12, y + 12, x + gridSize - 12, y + gridSize - 12]
+      for (let bx of boltPositions.slice(0,2)) {
+        for (let by of [boltPositions[1], boltPositions[3]]) {
+          ctx.beginPath()
+          ctx.arc(bx, by, 3, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+    }
+  }
+  
+  // Add some wear/scratches
+  ctx.strokeStyle = '#222228'
+  ctx.lineWidth = 1
+  for (let i = 0; i < 20; i++) {
+    ctx.beginPath()
+    ctx.moveTo(Math.random() * 512, Math.random() * 512)
+    ctx.lineTo(Math.random() * 512, Math.random() * 512)
+    ctx.stroke()
+  }
+  
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(4, 4)
+  return texture
+}
+
+function createWallTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext('2d')
+  
+  // Base - industrial grey-blue
+  ctx.fillStyle = '#3a3a48'
+  ctx.fillRect(0, 0, 512, 512)
+  
+  // Panel divisions
+  const panelWidth = 128
+  ctx.strokeStyle = '#2a2a35'
+  ctx.lineWidth = 4
+  
+  // Vertical lines
+  for (let x = panelWidth; x < 512; x += panelWidth) {
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, 512)
+    ctx.stroke()
+  }
+  
+  // Horizontal lines
+  for (let y = panelWidth; y < 512; y += panelWidth) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(512, y)
+    ctx.stroke()
+  }
+  
+  // Rivets along panel edges
+  ctx.fillStyle = '#5a5a68'
+  const rivetSpacing = 32
+  for (let x = rivetSpacing; x < 512; x += rivetSpacing) {
+    for (let y = rivetSpacing; y < 512; y += rivetSpacing) {
+      // Only place rivets near panel edges
+      if (x < panelWidth || x > panelWidth * 3) {
+        ctx.beginPath()
+        ctx.arc(x, y, 4, 0, Math.PI * 2)
+        ctx.fill()
+        // Rivet highlight
+        ctx.fillStyle = '#6a6a78'
+        ctx.beginPath()
+        ctx.arc(x - 1, y - 1, 2, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = '#5a5a68'
+      }
+    }
+  }
+  
+  // Add some panel details - warning stripes in corners
+  ctx.fillStyle = '#ffaa00'
+  ctx.globalAlpha = 0.3
+  ctx.fillRect(0, 0, 40, 40)
+  ctx.fillRect(472, 0, 40, 40)
+  ctx.fillRect(0, 472, 40, 40)
+  ctx.fillRect(472, 472, 40, 40)
+  ctx.globalAlpha = 1.0
+  
+  // Vertical cable/pipe running down
+  ctx.fillStyle = '#555560'
+  ctx.fillRect(100, 0, 15, 512)
+  ctx.fillStyle = '#656570'
+  ctx.fillRect(102, 0, 5, 512)
+  
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(2, 1)
+  return texture
+}
+
+function createCeilingTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 512
+  canvas.height = 512
+  const ctx = canvas.getContext('2d')
+  
+  // Base - darker
+  ctx.fillStyle = '#1a1a22'
+  ctx.fillRect(0, 0, 512, 512)
+  
+  // Grid pattern
+  const gridSize = 128
+  ctx.strokeStyle = '#252530'
+  ctx.lineWidth = 2
+  
+  for (let x = gridSize; x < 512; x += gridSize) {
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, 512)
+    ctx.stroke()
+  }
+  
+  for (let y = gridSize; y < 512; y += gridSize) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(512, y)
+    ctx.stroke()
+  }
+  
+  // Light fixture circles
+  for (let x = gridSize/2; x < 512; x += gridSize) {
+    for (let y = gridSize/2; y < 512; y += gridSize) {
+      // Fixture base
+      ctx.fillStyle = '#2a2a35'
+      ctx.beginPath()
+      ctx.arc(x, y, 30, 0, Math.PI * 2)
+      ctx.fill()
+      
+      // Light glow area
+      ctx.fillStyle = '#ffffcc'
+      ctx.globalAlpha = 0.5
+      ctx.beginPath()
+      ctx.arc(x, y, 20, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.globalAlpha = 1.0
+    }
+  }
+  
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.repeat.set(4, 4)
+  return texture
+}
+
 function generateMaze() {
   // Initialize maze with walls
   maze = []
@@ -131,10 +323,10 @@ function generateMaze() {
 }
 
 function init() {
-  // Scene - brighter background
+  // Scene - darker atmosphere for more dramatic lighting
   scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x2a2a3e)
-  scene.fog = new THREE.Fog(0x2a2a3e, 8, 50)
+  scene.background = new THREE.Color(0x1a1a25)
+  scene.fog = new THREE.Fog(0x1a1a25, 5, 35)
 
   // Camera
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100)
@@ -144,22 +336,57 @@ function init() {
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true })
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.setClearColor(0x1a1a2e)
+  renderer.setClearColor(0x1a1a25)
 
-  // Lighting - MUCH brighter now
-  const ambientLight = new THREE.AmbientLight(0x9090a0, 1.5)
+  // Dim ambient for dramatic lighting
+  const ambientLight = new THREE.AmbientLight(0x9090a0, 0.4)
   scene.add(ambientLight)
 
-  // Add lights throughout the maze - brighter!
-  for (let i = 0; i < 15; i++) {
+  // Add ceiling lights throughout the maze
+  for (let i = 0; i < 20; i++) {
     const x = (i % 5) * 5 + 2
-    const z = Math.floor(i / 5) * 8 + 2
-    const light = new THREE.PointLight(0xffffcc, 1.2, 15)
-    light.position.set(x, 2.8, z)
+    const z = Math.floor(i / 5) * 5 + 2
+    const light = new THREE.PointLight(0xffffcc, 1.5, 12)
+    light.position.set(x, 2.7, z)
     scene.add(light)
     
     // Light fixture visual
     const fixtureGeometry = new THREE.BoxGeometry(0.8, 0.1, 0.3)
+    const fixtureMaterial = new THREE.MeshBasicMaterial({ color: 0xffffcc })
+    const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial)
+    fixture.position.set(x, 2.9, z)
+    scene.add(fixture)
+  }
+
+  // Add wall lights along corridors
+  for (let x = 2; x < mazeSize - 2; x += 4) {
+    for (let z = 2; z < mazeSize - 2; z += 4) {
+      // Check if this is a corridor (not a wall)
+      if (maze[z] && maze[z][x] === 0) {
+        // Check adjacent cells for walls to place lights on
+        const directions = [[1,0], [-1,0], [0,1], [0,-1]]
+        for (const [dx, dz] of directions) {
+          const wx = x + dx
+          const wz = z + dz
+          if (wx > 0 && wx < mazeSize - 1 && wz > 0 && wz < mazeSize - 1 && maze[wz] && maze[wz][wx] === 1) {
+            // Found a wall adjacent to corridor - place a light
+            const wallLight = new THREE.PointLight(0xffaa66, 0.8, 8)
+            wallLight.position.set(wx - dx * 0.3, 1.5, wz - dz * 0.3)
+            scene.add(wallLight)
+            
+            // Wall sconce visual
+            const sconceGeometry = new THREE.SphereGeometry(0.15, 8, 8)
+            const sconceMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa66 })
+            const sconce = new THREE.Mesh(sconceGeometry, sconceMaterial)
+            sconce.position.set(wx - dx * 0.4, 1.5, wz - dz * 0.4)
+            scene.add(sconce)
+            
+            break // Only one wall light per corridor cell
+          }
+        }
+      }
+    }
+  }
     const fixtureMaterial = new THREE.MeshBasicMaterial({ color: 0xffffcc })
     const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial)
     fixture.position.set(x, 2.95, z)
@@ -175,6 +402,36 @@ function init() {
   // Generate maze
   generateMaze()
   createMazeGeometry()
+
+  // Add wall lights along corridors (after maze exists)
+  for (let x = 2; x < mazeSize - 2; x += 4) {
+    for (let z = 2; z < mazeSize - 2; z += 4) {
+      // Check if this is a corridor (not a wall)
+      if (maze[z] && maze[z][x] === 0) {
+        // Check adjacent cells for walls to place lights on
+        const directions = [[1,0], [-1,0], [0,1], [0,-1]]
+        for (const [dx, dz] of directions) {
+          const wx = x + dx
+          const wz = z + dz
+          if (wx > 0 && wx < mazeSize - 1 && wz > 0 && wz < mazeSize - 1 && maze[wz] && maze[wz][wx] === 1) {
+            // Found a wall adjacent to corridor - place a light
+            const wallLight = new THREE.PointLight(0xffaa66, 0.8, 8)
+            wallLight.position.set(wx - dx * 0.3, 1.5, wz - dz * 0.3)
+            scene.add(wallLight)
+            
+            // Wall sconce visual
+            const sconceGeometry = new THREE.SphereGeometry(0.15, 8, 8)
+            const sconceMaterial = new THREE.MeshBasicMaterial({ color: 0xffaa66 })
+            const sconce = new THREE.Mesh(sconceGeometry, sconceMaterial)
+            sconce.position.set(wx - dx * 0.4, 1.5, wz - dz * 0.4)
+            scene.add(sconce)
+            
+            break // Only one wall light per corridor cell
+          }
+        }
+      }
+    }
+  }
 
   // Place collectibles
   placeCollectibles()
@@ -194,13 +451,18 @@ function createMazeGeometry() {
   walls.forEach(w => scene.remove(w))
   walls = []
 
-  // Floor - industrial metal
+  // Create procedural textures
+  const floorTexture = createFloorTexture()
+  const wallTexture = createWallTexture()
+  const ceilingTexture = createCeilingTexture()
+
+  // Floor - industrial metal grating
   const floorGeometry = new THREE.PlaneGeometry(mazeSize, mazeSize)
   const floorMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x3a3a4a,
-    roughness: 0.8,
-    metalness: 0.3,
-    emissive: 0x111118,
+    map: floorTexture,
+    roughness: 0.7,
+    metalness: 0.5,
+    emissive: 0x111115,
     emissiveIntensity: 0.1
   })
   const floor = new THREE.Mesh(floorGeometry, floorMaterial)
@@ -209,19 +471,26 @@ function createMazeGeometry() {
   scene.add(floor)
 
   // Ceiling
-  const ceiling = new THREE.Mesh(floorGeometry, floorMaterial.clone())
+  const ceilingMaterial = new THREE.MeshStandardMaterial({
+    map: ceilingTexture,
+    roughness: 0.9,
+    metalness: 0.2,
+    emissive: 0x111115,
+    emissiveIntensity: 0.05
+  })
+  const ceiling = new THREE.Mesh(floorGeometry.clone(), ceilingMaterial)
   ceiling.rotation.x = Math.PI / 2
   ceiling.position.set(mazeSize / 2, 3, mazeSize / 2)
   scene.add(ceiling)
 
-  // Walls
+  // Walls - riveted metal panels
   const wallGeometry = new THREE.BoxGeometry(1, 3, 1)
   const wallMaterial = new THREE.MeshStandardMaterial({
-    color: 0x4a4a5a,
-    roughness: 0.7,
-    metalness: 0.4,
+    map: wallTexture,
+    roughness: 0.6,
+    metalness: 0.5,
     emissive: 0x111122,
-    emissiveIntensity: 0.2
+    emissiveIntensity: 0.15
   })
 
   // Pipe material for industrial look

@@ -73,6 +73,9 @@ const playerPos = ref({ x: 0, z: 0 })
 let playerAngle = 0
 let targetRotation = 0
 
+// Camera - 0 = behind (navigation), 1 = top-down (fighting)
+let cameraMode = 0 // Start in behind view
+
 // Wind
 let windAngle = 0
 const windSpeed = ref(3)
@@ -154,6 +157,7 @@ function init() {
   window.addEventListener('mousedown', onMouseDown)
   window.addEventListener('contextmenu', onContextMenu)
   window.addEventListener('pointerlockchange', onPointerLockChange)
+  window.addEventListener('wheel', onWheel)
 }
 
 function createOcean() {
