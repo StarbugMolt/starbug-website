@@ -20,7 +20,7 @@
     <canvas ref="canvas"></canvas>
 
     <div class="controls">
-      <div class="control-hint">🎯 Click to lock | Move mouse to steer | LMB=Port | RMB=Starboard | Avoid rocks!</div>
+      <div class="control-hint">🎯 Click to lock | Move mouse to steer | LMB=Starboard | RMB=Port | Avoid rocks!</div>
     </div>
 
     <div class="overlay" v-if="gameState === 'start'">
@@ -28,8 +28,8 @@
       <p>Navigate the Caribbean. Fight the navy. Survive the Kraken.</p>
       <div class="instructions">
         <p>🖱️ <strong>Mouse</strong> - Steer your ship</p>
-        <p>🖱️ <strong>Left Click</strong> - Fire port (left)</p>
-        <p>🖱️ <strong>Right Click</strong> - Fire starboard (right)</p>
+        <p>🖱️ <strong>Left Click</strong> - Fire starboard (right)</p>
+        <p>🖱️ <strong>Right Click</strong> - Fire port (left)</p>
         <p>💨 <strong>Wind</strong> - Sail with the wind for speed, against it for control</p>
         <p>🪨 <strong>Avoid</strong> - Islands, rocks, and the Kraken</p>
         <p>⚔️ <strong>Defeat</strong> - The enemy ship, then face the Kraken</p>
@@ -71,6 +71,7 @@ const playerSpeed = ref(0)
 let playerShip
 const playerPos = ref({ x: 0, z: 0 })
 let playerAngle = 0
+let targetRotation = 0
 
 // Wind
 let windAngle = 0
@@ -654,13 +655,13 @@ function updateCannonballs(dt) {
 }
 
 let mouseDeltaX = 0 // Track mouse movement for steering
-let pointerLocked = false
 
 function onMouseMove(e) {
   // Always accumulate mouse movement when game is playing
   // This works because pointer lock captures all mouse movement
   if (gameState.value === 'playing') {
-    mouseDeltaX += e.movementX * 0.005
+    // Reduced sensitivity for smoother turning
+    mouseDeltaX += e.movementX * 0.001
   }
 }
 
@@ -690,20 +691,21 @@ function onClick(e) {
 
 function onMouseDown(e) {
   if (gameState.value === 'playing') {
-    // Left click (button 0) = port (left), Right click (button 2) = starboard (right)
+    // Left click (button 0) = starboard (right), Right click (button 2) = port (left)
+    // Inverted: left side of ship = left click feels more natural
     if (e.button === 0) {
-      fireCannon('port')
-    } else if (e.button === 2) {
       fireCannon('starboard')
+    } else if (e.button === 2) {
+      fireCannon('port')
     }
   }
 }
 
 function onContextMenu(e) {
   e.preventDefault() // Prevent context menu on right click
-  // Right click also fires starboard cannons when playing
+  // Right click fires port cannons (inverted from left click)
   if (gameState.value === 'playing') {
-    fireCannon('starboard')
+    fireCannon('port')
   }
 }
 
@@ -860,14 +862,20 @@ function update(dt) {
   animateSails(dt)
   
   // === GRADUAL STEERING WITH MOUSE ===
-  // Apply mouse delta to rotation (continuous turning when pointer locked)
-  // Also apply steering even if pointer lock state is uncertain
+  // Add mouse delta to target rotation for easing
   if (mouseDeltaX !== 0) {
-    playerAngle += mouseDeltaX
-    // Decay the mouse delta (feels more natural)
-    mouseDeltaX *= 0.85
+    targetRotation += mouseDeltaX
+    // Decay the mouse delta
+    mouseDeltaX *= 0.7
     // Clear if very small
-    if (Math.abs(mouseDeltaX) < 0.001) mouseDeltaX = 0
+    if (Math.abs(mouseDeltaX) < 0.0001) mouseDeltaX = 0
+  }
+  
+  // Ease player angle towards target rotation (smooth turning)
+  const turnSpeed = 3.0 // How fast the boat actually turns
+  const angleDiff = targetRotation - playerAngle
+  if (Math.abs(angleDiff) > 0.001) {
+    playerAngle += angleDiff * turnSpeed * dt
   }
   
   // === MOMENTUM-BASED SPEED PHYSICS ===
@@ -1104,8 +1112,8 @@ function startGame() {
   if (document.pointerLockElement) {
     document.exitPointerLock()
   }
-  pointerLocked = false
   mouseDeltaX = 0
+  targetRotation = 0
   
   // Reset
   hp.value = 100
@@ -1115,6 +1123,7 @@ function startGame() {
   starboardCooldown.value = 0
   playerPos.value = { x: 0, z: 0 }
   playerAngle = 0
+  targetRotation = 0
   playerSpeed.value = 0
   
   enemyShip.value = { x: 100, z: -100, hp: 100, angle: 0 }
