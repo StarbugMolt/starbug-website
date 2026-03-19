@@ -540,6 +540,558 @@ function createMazeGeometry() {
   }
 }
 
+// ============================================
+// 3D COLLECTIBLE PROP CREATORS
+// ============================================
+
+// Load texture from URL
+function loadTexture(url) {
+  const loader = new THREE.TextureLoader()
+  return loader.load(url)
+}
+
+function createHollyHead() {
+  const group = new THREE.Group()
+  
+  // Create Holly's face as a plane with texture
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const ctx = canvas.getContext('2d')
+  
+  // Black background
+  ctx.fillStyle = '#000000'
+  ctx.fillRect(0, 0, 256, 256)
+  
+  // Draw face (simplified Norman Lovett)
+  ctx.fillStyle = '#e8d4b8' // skin tone
+  ctx.beginPath()
+  ctx.ellipse(128, 130, 70, 85, 0, 0, Math.PI * 2)
+  ctx.fill()
+  
+  // Hair (receding)
+  ctx.fillStyle = '#6a5a4a'
+  ctx.beginPath()
+  ctx.ellipse(128, 80, 72, 40, 0, Math.PI, Math.PI * 2)
+  ctx.fill()
+  
+  // Eyes
+  ctx.fillStyle = '#c0d0e0' // blue-grey
+  ctx.beginPath()
+  ctx.ellipse(100, 120, 15, 10, 0, 0, Math.PI * 2)
+  ctx.ellipse(156, 120, 15, 10, 0, 0, Math.PI * 2)
+  ctx.fill()
+  
+  // Pupils
+  ctx.fillStyle = '#303030'
+  ctx.beginPath()
+  ctx.arc(100, 120, 6, 0, Math.PI * 2)
+  ctx.arc(156, 120, 6, 0, Math.PI * 2)
+  ctx.fill()
+  
+  // Nose
+  ctx.fillStyle = '#d8c4a8'
+  ctx.beginPath()
+  ctx.moveTo(128, 125)
+  ctx.lineTo(120, 150)
+  ctx.lineTo(136, 150)
+  ctx.closePath()
+  ctx.fill()
+  
+  // Mouth (slightly open)
+  ctx.fillStyle = '#202020'
+  ctx.beginPath()
+  ctx.ellipse(128, 170, 20, 12, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.ellipse(128, 168, 15, 6, 0, 0, Math.PI)
+  ctx.fill()
+  
+  // Wrinkles / features
+  ctx.strokeStyle = '#c0b0a0'
+  ctx.lineWidth = 2
+  // Crow's feet
+  ctx.beginPath()
+  ctx.moveTo(75, 115)
+  ctx.lineTo(85, 118)
+  ctx.moveTo(75, 122)
+  ctx.lineTo(85, 122)
+  ctx.moveTo(181, 115)
+  ctx.lineTo(171, 118)
+  ctx.moveTo(181, 122)
+  ctx.lineTo(171, 122)
+  ctx.stroke()
+  
+  // Forehead lines
+  ctx.beginPath()
+  ctx.moveTo(100, 95)
+  ctx.lineTo(156, 95)
+  ctx.moveTo(105, 85)
+  ctx.lineTo(151, 85)
+  ctx.stroke()
+  
+  // Create texture from canvas
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.needsUpdate = true
+  
+  // Screen/frame
+  const screenGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.1)
+  const screenMaterial = new THREE.MeshStandardMaterial({ 
+    map: texture,
+    emissive: 0xffffff,
+    emissiveIntensity: 0.3
+  })
+  const screen = new THREE.Mesh(screenGeometry, screenMaterial)
+  screen.rotation.y = Math.PI
+  group.add(screen)
+  
+  // Frame/stand
+  const frameGeometry = new THREE.BoxGeometry(0.9, 0.9, 0.05)
+  const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x333340, metalness: 0.8, roughness: 0.3 })
+  const frame = new THREE.Mesh(frameGeometry, frameMaterial)
+  frame.position.z = -0.03
+  group.add(frame)
+  
+  // Glowing edge
+  const edgeGeometry = new THREE.EdgesGeometry(screenGeometry)
+  const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 })
+  const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial)
+  edges.position.z = 0.06
+  group.add(edges)
+  
+  return group
+}
+
+function createKryten() {
+  const group = new THREE.Group()
+  
+  // Head (elongated egg shape)
+  const headGeometry = new THREE.SphereGeometry(0.35, 16, 16)
+  headGeometry.scale(1, 1.3, 0.9)
+  const headMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xc0c0c8, 
+    metalness: 0.9, 
+    roughness: 0.2 
+  })
+  const head = new THREE.Mesh(headGeometry, headMaterial)
+  head.position.y = 0.3
+  group.add(head)
+  
+  // Face plate (metallic face)
+  const faceGeometry = new THREE.SphereGeometry(0.3, 16, 16)
+  faceGeometry.scale(1, 1.1, 0.5)
+  const faceMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xa0a0a8, 
+    metalness: 0.95, 
+    roughness: 0.1 
+  })
+  const face = new THREE.Mesh(faceGeometry, faceMaterial)
+  face.position.set(0, 0.25, 0.2)
+  group.add(face)
+  
+  // Eyes (glowing red)
+  const eyeGeometry = new THREE.SphereGeometry(0.06, 8, 8)
+  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 })
+  const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial)
+  leftEye.position.set(-0.12, 0.35, 0.32)
+  group.add(leftEye)
+  const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial)
+  rightEye.position.set(0.12, 0.35, 0.32)
+  group.add(rightEye)
+  
+  // Eye glow
+  const eyeLight = new THREE.PointLight(0xff0000, 0.5, 2)
+  eyeLight.position.set(0, 0.35, 0.4)
+  group.add(eyeLight)
+  
+  // Antenna
+  const antennaGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8)
+  const antennaMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9 })
+  const antenna = new THREE.Mesh(antennaGeometry, antennaMaterial)
+  antenna.position.set(0.15, 0.7, 0)
+  antenna.rotation.z = -0.3
+  group.add(antenna)
+  
+  // Antenna tip (red)
+  const tipGeometry = new THREE.SphereGeometry(0.04, 8, 8)
+  const tipMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 })
+  const tip = new THREE.Mesh(tipGeometry, tipMaterial)
+  tip.position.set(0.22, 0.82, 0)
+  group.add(tip)
+  
+  // Red markings on head
+  const markingGeometry = new THREE.BoxGeometry(0.4, 0.02, 0.01)
+  const markingMaterial = new THREE.MeshBasicMaterial({ color: 0xff3030 })
+  const marking1 = new THREE.Mesh(markingGeometry, markingMaterial)
+  marking1.position.set(0, 0.55, 0.3)
+  group.add(marking1)
+  
+  // Collar/suit indication
+  const collarGeometry = new THREE.BoxGeometry(0.5, 0.15, 0.3)
+  const collarMaterial = new THREE.MeshStandardMaterial({ color: 0x303040, metalness: 0.3 })
+  const collar = new THREE.Mesh(collarGeometry, collarMaterial)
+  collar.position.y = -0.1
+  group.add(collar)
+  
+  return group
+}
+
+function createHollyHopDrive() {
+  const group = new THREE.Group()
+  
+  // Main box (red)
+  const boxGeometry = new THREE.BoxGeometry(0.4, 0.25, 0.2)
+  const boxMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xcc2222, 
+    metalness: 0.3, 
+    roughness: 0.6 
+  })
+  const box = new THREE.Mesh(boxGeometry, boxMaterial)
+  group.add(box)
+  
+  // Button "START" (green)
+  const startGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16)
+  startGeometry.rotateX(Math.PI / 2)
+  const startMaterial = new THREE.MeshStandardMaterial({ color: 0x22cc22, emissive: 0x00aa00, emissiveIntensity: 0.5 })
+  const startBtn = new THREE.Mesh(startGeometry, startMaterial)
+  startBtn.position.set(-0.1, 0.05, 0.11)
+  group.add(startBtn)
+  
+  // Button "STOP" (red)
+  const stopMaterial = new THREE.MeshStandardMaterial({ color: 0xaa2222, emissive: 0x550000, emissiveIntensity: 0.5 })
+  const stopBtn = new THREE.Mesh(startGeometry.clone(), stopMaterial)
+  stopBtn.position.set(0.1, 0.05, 0.11)
+  group.add(stopBtn)
+  
+  // Label plates
+  const labelGeometry = new THREE.PlaneGeometry(0.12, 0.04)
+  const labelCanvas = document.createElement('canvas')
+  labelCanvas.width = 64
+  labelCanvas.height = 20
+  const ctx = labelCanvas.getContext('2d')
+  ctx.fillStyle = '#222222'
+  ctx.fillRect(0, 0, 64, 20)
+  ctx.fillStyle = '#00ff00'
+  ctx.font = 'bold 10px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText('START', 32, 14)
+  const startLabelTexture = new THREE.CanvasTexture(labelCanvas)
+  
+  const startLabelMaterial = new THREE.MeshBasicMaterial({ map: startLabelTexture })
+  const startLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.04), startLabelMaterial)
+  startLabel.position.set(-0.1, 0.08, 0.11)
+  group.add(startLabel)
+  
+  // STOP label
+  const stopCanvas = document.createElement('canvas')
+  stopCanvas.width = 64
+  stopCanvas.height = 20
+  const ctx2 = stopCanvas.getContext('2d')
+  ctx2.fillStyle = '#222222'
+  ctx2.fillRect(0, 0, 64, 20)
+  ctx2.fillStyle = '#ff4444'
+  ctx2.font = 'bold 10px monospace'
+  ctx2.textAlign = 'center'
+  ctx2.fillText('STOP', 32, 14)
+  const stopLabelTexture = new THREE.CanvasTexture(stopCanvas)
+  
+  const stopLabelMaterial = new THREE.MeshBasicMaterial({ map: stopLabelTexture })
+  const stopLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.04), stopLabelMaterial)
+  stopLabel.position.set(0.1, 0.08, 0.11)
+  group.add(stopLabel)
+  
+  // Glowing wires on top
+  const wireGeometry = new THREE.CylinderGeometry(0.01, 0.01, 0.15, 8)
+  const wireMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+  const wire1 = new THREE.Mesh(wireGeometry, wireMaterial)
+  wire1.position.set(-0.08, 0.2, 0)
+  group.add(wire1)
+  const wire2 = new THREE.Mesh(wireGeometry, wireMaterial)
+  wire2.position.set(0.08, 0.2, 0)
+  group.add(wire2)
+  
+  return group
+}
+
+function createCurry() {
+  const group = new THREE.Group()
+  
+  // Bowl
+  const bowlGeometry = new THREE.SphereGeometry(0.25, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)
+  const bowlMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.3 })
+  const bowl = new THREE.Mesh(bowlGeometry, bowlMaterial)
+  bowl.rotation.x = Math.PI
+  group.add(bowl)
+  
+  // Curry (orange/brown)
+  const curryGeometry = new THREE.CircleGeometry(0.22, 16)
+  const curryMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0xcc6600, 
+    roughness: 0.9,
+    emissive: 0x331100,
+    emissiveIntensity: 0.2
+  })
+  const curry = new THREE.Mesh(curryGeometry, curryMaterial)
+  curry.rotation.x = -Math.PI / 2
+  curry.position.y = 0.1
+  group.add(curry)
+  
+  // Rice (white mounds)
+  const riceGeometry = new THREE.SphereGeometry(0.08, 8, 8)
+  const riceMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff })
+  for (let i = 0; i < 3; i++) {
+    const rice = new THREE.Mesh(riceGeometry, riceMaterial)
+    rice.position.set((Math.random() - 0.5) * 0.2, 0.12, (Math.random() - 0.5) * 0.2)
+    rice.scale.y = 0.6
+    group.add(rice)
+  }
+  
+  // Steam particles (will be added as simple spheres)
+  const steamGeometry = new THREE.SphereGeometry(0.03, 4, 4)
+  const steamMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })
+  for (let i = 0; i < 5; i++) {
+    const steam = new THREE.Mesh(steamGeometry, steamMaterial)
+    steam.position.set((Math.random() - 0.5) * 0.15, 0.2 + i * 0.08, (Math.random() - 0.5) * 0.15)
+    steam.userData.floatSpeed = 0.5 + Math.random() * 0.5
+    steam.userData.floatOffset = Math.random() * Math.PI * 2
+    group.add(steam)
+  }
+  
+  return group
+}
+
+function createVendingMachine() {
+  const group = new THREE.Group()
+  
+  // Main body
+  const bodyGeometry = new THREE.BoxGeometry(0.6, 1.0, 0.3)
+  const bodyMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x444455, 
+    metalness: 0.5, 
+    roughness: 0.5 
+  })
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
+  body.position.y = 0.5
+  group.add(body)
+  
+  // Screen (red "OUT OF ORDER")
+  const screenCanvas = document.createElement('canvas')
+  screenCanvas.width = 128
+  screenCanvas.height = 64
+  const ctx = screenCanvas.getContext('2d')
+  ctx.fillStyle = '#220000'
+  ctx.fillRect(0, 0, 128, 64)
+  ctx.fillStyle = '#ff0000'
+  ctx.font = 'bold 12px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText('OUT OF', 64, 25)
+  ctx.fillText('ORDER', 64, 45)
+  const screenTexture = new THREE.CanvasTexture(screenCanvas)
+  
+  const screenGeometry = new THREE.PlaneGeometry(0.4, 0.25)
+  const screenMaterial = new THREE.MeshBasicMaterial({ map: screenTexture })
+  const screen = new THREE.Mesh(screenGeometry, screenMaterial)
+  screen.position.set(0, 0.7, 0.16)
+  group.add(screen)
+  
+  // Screen glow
+  const screenLight = new THREE.PointLight(0xff0000, 0.5, 2)
+  screenLight.position.set(0, 0.7, 0.3)
+  group.add(screenLight)
+  
+  // Glass panel
+  const glassGeometry = new THREE.PlaneGeometry(0.45, 0.5)
+  const glassMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x88ccff, 
+    transparent: true, 
+    opacity: 0.3,
+    metalness: 0.9,
+    roughness: 0.1
+  })
+  const glass = new THREE.Mesh(glassGeometry, glassMaterial)
+  glass.position.set(0, 0.45, 0.16)
+  group.add(glass)
+  
+  return group
+}
+
+function createCatShoes() {
+  const group = new THREE.Group()
+  
+  const shoeMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x6633aa, 
+    roughness: 0.4,
+    metalness: 0.3
+  })
+  
+  // Left shoe
+  const shoeGeometry = new THREE.BoxGeometry(0.12, 0.08, 0.25)
+  const leftShoe = new THREE.Mesh(shoeGeometry, shoeMaterial)
+  leftShoe.position.set(-0.1, 0.04, 0)
+  leftShoe.rotation.y = 0.2
+  group.add(leftShoe)
+  
+  // Right shoe
+  const rightShoe = new THREE.Mesh(shoeGeometry, shoeMaterial)
+  rightShoe.position.set(0.1, 0.04, 0)
+  rightShoe.rotation.y = -0.2
+  group.add(rightShoe)
+  
+  // Shine highlights
+  const shineMaterial = new THREE.MeshBasicMaterial({ color: 0x9966ff })
+  const shine1 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.15), shineMaterial)
+  shine1.position.set(-0.1, 0.05, 0.05)
+  group.add(shine1)
+  const shine2 = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.15), shineMaterial)
+  shine2.position.set(0.1, 0.05, 0.05)
+  group.add(shine2)
+  
+  return group
+}
+
+function createVHS() {
+  const group = new THREE.Group()
+  
+  // Cassette body
+  const bodyGeometry = new THREE.BoxGeometry(0.3, 0.05, 0.2)
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x222233 })
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
+  group.add(body)
+  
+  // Label
+  const labelCanvas = document.createElement('canvas')
+  labelCanvas.width = 128
+  labelCanvas.height = 64
+  const ctx = labelCanvas.getContext('2d')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, 128, 64)
+  ctx.fillStyle = '#000000'
+  ctx.font = 'bold 8px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('ZERO-G', 64, 25)
+  ctx.fillText('FOOTBALL', 64, 40)
+  ctx.fillStyle = '#ff0000'
+  ctx.font = 'bold 6px sans-serif'
+  ctx.fillText('SP', 20, 55)
+  ctx.fillText('120 MIN', 108, 55)
+  const labelTexture = new THREE.CanvasTexture(labelCanvas)
+  
+  const labelGeometry = new THREE.PlaneGeometry(0.25, 0.04)
+  const labelMaterial = new THREE.MeshBasicMaterial({ map: labelTexture })
+  const label = new THREE.Mesh(labelGeometry, labelMaterial)
+  label.position.y = 0.026
+  label.rotation.x = -Math.PI / 2
+  group.add(label)
+  
+  // Spools
+  const spoolGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16)
+  const spoolMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 })
+  const leftSpool = new THREE.Mesh(spoolGeometry, spoolMaterial)
+  leftSpool.position.set(-0.08, 0.03, 0)
+  leftSpool.rotation.x = Math.PI / 2
+  group.add(leftSpool)
+  const rightSpool = new THREE.Mesh(spoolGeometry, spoolMaterial)
+  rightSpool.position.set(0.08, 0.03, 0)
+  rightSpool.rotation.x = Math.PI / 2
+  group.add(rightSpool)
+  
+  return group
+}
+
+function createHologram() {
+  const group = new THREE.Group()
+  
+  // Rimmer-style hologram body
+  const bodyGeometry = new THREE.CylinderGeometry(0.15, 0.2, 0.5, 8)
+  const bodyMaterial = new THREE.MeshBasicMaterial({ 
+    color: 0x4444ff, 
+    transparent: true, 
+    opacity: 0.6 
+  })
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
+  group.add(body)
+  
+  // Head
+  const headGeometry = new THREE.SphereGeometry(0.12, 16, 16)
+  const head = new THREE.Mesh(headGeometry, bodyMaterial)
+  head.position.y = 0.35
+  group.add(head)
+  
+  // Eyes (glowing)
+  const eyeGeometry = new THREE.SphereGeometry(0.02, 8, 8)
+  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 })
+  const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial)
+  leftEye.position.set(-0.04, 0.38, 0.1)
+  group.add(leftEye)
+  const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial)
+  rightEye.position.set(0.04, 0.38, 0.1)
+  group.add(rightEye)
+  
+  // Glow light
+  const hologramLight = new THREE.PointLight(0x4444ff, 1, 3)
+  hologramLight.position.y = 0.2
+  group.add(hologramLight)
+  
+  return group
+}
+
+function createStarbug() {
+  const group = new THREE.Group()
+  
+  // Main body (elongated)
+  const bodyGeometry = new THREE.BoxGeometry(0.4, 0.2, 1.2)
+  const bodyMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x88aacc, 
+    metalness: 0.7, 
+    roughness: 0.3 
+  })
+  const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
+  group.add(body)
+  
+  // Cockpit (dome)
+  const cockpitGeometry = new THREE.SphereGeometry(0.15, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2)
+  const cockpitMaterial = new THREE.MeshStandardMaterial({ 
+    color: 0x33ccff, 
+    transparent: true, 
+    opacity: 0.7,
+    metalness: 0.9,
+    roughness: 0.1
+  })
+  const cockpit = new THREE.Mesh(cockpitGeometry, cockpitMaterial)
+  cockpit.position.set(0, 0.1, 0.4)
+  group.add(cockpit)
+  
+  // Wings
+  const wingGeometry = new THREE.BoxGeometry(0.8, 0.05, 0.4)
+  const wingMaterial = new THREE.MeshStandardMaterial({ color: 0x668899, metalness: 0.6 })
+  const wings = new THREE.Mesh(wingGeometry, wingMaterial)
+  wings.position.set(0, 0, -0.2)
+  group.add(wings)
+  
+  // Engines (glowing)
+  const engineGeometry = new THREE.CylinderGeometry(0.08, 0.1, 0.3, 8)
+  const engineMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+  const leftEngine = new THREE.Mesh(engineGeometry, engineMaterial)
+  leftEngine.rotation.x = Math.PI / 2
+  leftEngine.position.set(-0.25, 0, -0.5)
+  group.add(leftEngine)
+  const rightEngine = new THREE.Mesh(engineGeometry, engineMaterial)
+  rightEngine.rotation.x = Math.PI / 2
+  rightEngine.position.set(0.25, 0, -0.5)
+  group.add(rightEngine)
+  
+  // Engine glow
+  const engineLight1 = new THREE.PointLight(0x00ff00, 1, 3)
+  engineLight1.position.set(-0.25, 0, -0.6)
+  group.add(engineLight1)
+  const engineLight2 = new THREE.PointLight(0x00ff00, 1, 3)
+  engineLight2.position.set(0.25, 0, -0.6)
+  group.add(engineLight2)
+  
+  return group
+}
+
 function placeCollectibles() {
   // Clear existing
   collectibles.forEach(c => scene.remove(c.mesh))
@@ -562,29 +1114,65 @@ function placeCollectibles() {
     usedPositions.add(`${x},${z}`)
     item.position = { x: x + 0.5, z: z + 0.5 }
 
-    // Create glowing item
+    // Create 3D prop based on item name
     const itemGroup = new THREE.Group()
     
-    // Main item (floating box)
-    const boxGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3)
-    const boxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-    const box = new THREE.Mesh(boxGeometry, boxMaterial)
-    box.position.y = 1
-    itemGroup.add(box)
+    let propCreator = null
+    let propColor = 0x00ff00
+    
+    if (item.name.includes("Holly")) {
+      propCreator = createHollyHead
+      propColor = 0x00ff00
+    } else if (item.name.includes("Kryten")) {
+      propCreator = createKryten
+      propColor = 0xff0000
+    } else if (item.name.includes("Curry")) {
+      propCreator = createCurry
+      propColor = 0xff6600
+    } else if (item.name.includes("VHS")) {
+      propCreator = createVHS
+      propColor = 0x3333ff
+    } else if (item.name.includes("Rimmer")) {
+      propCreator = createHologram
+      propColor = 0x4444ff
+    } else if (item.name.includes("Cat")) {
+      propCreator = createCatShoes
+      propColor = 0x9933ff
+    } else if (item.name.includes("Vending")) {
+      propCreator = createVendingMachine
+      propColor = 0xff0000
+    } else if (item.name.includes("Starfighter")) {
+      propCreator = createHollyHopDrive
+      propColor = 0xff0000
+    }
+    
+    // Create the prop
+    if (propCreator) {
+      const prop = propCreator()
+      prop.position.y = 0.8
+      itemGroup.add(prop)
+    } else {
+      // Fallback to glowing box
+      const boxGeometry = new THREE.BoxGeometry(0.3, 0.3, 0.3)
+      const boxMaterial = new THREE.MeshBasicMaterial({ color: propColor })
+      const box = new THREE.Mesh(boxGeometry, boxMaterial)
+      box.position.y = 1
+      itemGroup.add(box)
+    }
 
-    // Glow
+    // Glow (always)
     const glowGeometry = new THREE.SphereGeometry(0.4, 16, 16)
     const glowMaterial = new THREE.MeshBasicMaterial({ 
-      color: 0x00ff00, 
+      color: propColor, 
       transparent: true, 
-      opacity: 0.3 
+      opacity: 0.2 
     })
     const glow = new THREE.Mesh(glowGeometry, glowMaterial)
     glow.position.y = 1
     itemGroup.add(glow)
 
     // Point light
-    const light = new THREE.PointLight(0x00ff00, 0.5, 3)
+    const light = new THREE.PointLight(propColor, 0.5, 3)
     light.position.y = 1
     itemGroup.add(light)
 
