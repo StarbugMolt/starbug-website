@@ -165,44 +165,65 @@ function init() {
 }
 
 function createOcean() {
-  // Base ocean - dark blue
-  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 80, 80)
+  // === BEAUTIFUL OCEAN WITH REAL WAVES ===
+  
+  // Deep ocean layer (dark base)
+  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 120, 120)
   const oceanMaterial = new THREE.MeshPhongMaterial({
-    color: 0x006994,
-    shininess: 150,
+    color: 0x005577, // Deep blue
+    shininess: 200,
+    specular: 0x111111,
     transparent: true,
     opacity: 0.95
   })
   ocean = new THREE.Mesh(oceanGeometry, oceanMaterial)
   ocean.rotation.x = -Math.PI / 2
-  ocean.position.y = -0.5
+  ocean.position.y = -0.3
   ocean.userData.originalPositions = oceanGeometry.attributes.position.array.slice()
   scene.add(ocean)
 
-  // Animated wave layer
-  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 60, 60)
+  // Wave surface layer - higher detail
+  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 150, 150)
   const waveMaterial = new THREE.MeshPhongMaterial({
-    color: 0x00aadd,
-    shininess: 200,
+    color: 0x0088aa, // Lighter blue
+    shininess: 250,
+    specular: 0x444444,
     transparent: true,
-    opacity: 0.4,
+    opacity: 0.7,
     side: THREE.DoubleSide
   })
   const waves = new THREE.Mesh(waveGeometry, waveMaterial)
   waves.rotation.x = -Math.PI / 2
   waves.position.y = 0
   waves.userData.originalPositions = waveGeometry.attributes.position.array.slice()
+  waves.userData.isWaveLayer = true
   scene.add(waves)
-  ocean = waves // Track this for animation
+  
+  // Store reference
+  ocean = waves
 
-  // Store original positions for wave animation
-  ocean.userData.originalPositions = waveGeometry.attributes.position.array.slice()
+  // Foam/whitecap layer
+  const foamGeometry = new THREE.PlaneGeometry(1500, 1500, 80, 80)
+  const foamMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.DoubleSide
+  })
+  const foam = new THREE.Mesh(foamGeometry, foamMaterial)
+  foam.rotation.x = -Math.PI / 2
+  foam.position.y = 0.1
+  foam.userData.originalPositions = foamGeometry.attributes.position.array.slice()
+  foam.userData.isFoamLayer = true
+  scene.add(foam)
+  ocean.userData.foam = foam
 }
 
-// Animate ocean waves
+// Animate ocean waves - beautiful realistic movement
 function animateOceanWaves(time) {
   if (!ocean || !ocean.userData.originalPositions) return
   
+  // Animate main wave layer
   const positions = ocean.geometry.attributes.position
   const original = ocean.userData.originalPositions
   
@@ -210,14 +231,46 @@ function animateOceanWaves(time) {
     const x = original[i * 3]
     const z = original[i * 3 + 2]
     
-    // Multiple wave frequencies for realistic ocean
-    const wave1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(z * 0.02 + time * 0.3) * 0.8
-    const wave2 = Math.sin(x * 0.05 + time * 0.8) * 0.3
-    const wave3 = Math.sin(z * 0.03 + time * 0.4) * 0.5
+    // Large rolling swells
+    const swell = Math.sin(x * 0.008 + time * 0.3) * Math.cos(z * 0.006 + time * 0.2) * 1.5
     
-    positions.array[i * 3 + 1] = wave1 + wave2 + wave3
+    // Medium waves
+    const wave1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(z * 0.015 + time * 0.4) * 0.8
+    
+    // Small ripples
+    const wave2 = Math.sin(x * 0.08 + time * 1.2) * 0.2
+    const wave3 = Math.sin(z * 0.06 + time * 0.9) * 0.15
+    
+    // Wind choppiness
+    const chop = (Math.sin(time * 2 + x * 0.1) + Math.cos(time * 1.5 + z * 0.1)) * 0.1
+    
+    // Combine all wave heights
+    positions.array[i * 3 + 1] = swell + wave1 + wave2 + wave3 + chop
   }
   positions.needsUpdate = true
+  
+  // Animate foam layer (whitecaps on wave peaks)
+  if (ocean.userData.foam) {
+    const foamPositions = ocean.userData.foam.geometry.attributes.position
+    const foamOriginal = ocean.userData.foam.userData.originalPositions
+    
+    for (let i = 0; i < foamPositions.count; i++) {
+      const x = foamOriginal[i * 3]
+      const z = foamOriginal[i * 3 + 2]
+      
+      // Foam appears on wave crests
+      const swell = Math.sin(x * 0.008 + time * 0.3) * Math.cos(z * 0.006 + time * 0.2) * 1.5
+      const wave1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(z * 0.015 + time * 0.4) * 0.8
+      
+      const waveHeight = swell + wave1
+      
+      // Only show foam on wave crests
+      const foam = waveHeight > 1.2 ? (waveHeight - 1.2) * 0.3 : 0
+      
+      foamPositions.array[i * 3 + 1] = waveHeight * 0.3 + foam
+    }
+    foamPositions.needsUpdate = true
+  }
 }
 
 function createSky() {
@@ -1155,13 +1208,17 @@ function update(dt) {
   const topDownHeight = 80
   
   // Interpolate based on cameraMode
-  const dist = behindDist + (topDownDist - behindDist) * cameraMode
+  let dist = behindDist + (topDownDist - behindDist) * cameraMode
   const height = behindHeight + (topDownHeight - behindHeight) * cameraMode
+  
+  // Add distance based on speed (camera pulls back when going faster)
+  const speedBoost = playerSpeed.value * 1.5
+  dist += speedBoost
   
   camera.position.x = playerPos.value.x - Math.sin(playerAngle) * dist
   camera.position.z = playerPos.value.z - Math.cos(playerAngle) * dist
   camera.position.y = height
-  camera.lookAt(playerPos.value.x, 0, playerPos.value.z)
+  camera.lookAt(playerPos.value.x, 5, playerPos.value.z) // Look slightly above water
   
   // Island collision
   for (const island of islands) {
