@@ -249,51 +249,108 @@ function createPlayerShip() {
   foreMast.position.set(0, 5, -2.5)
   playerShip.add(foreMast)
 
-  // === WHITE SAILS THAT REACT TO WIND ===
-  // Main sail - positioned forward, billows dramatically with wind
-  const sailGeometry = new THREE.PlaneGeometry(5, 7, 15, 20)
-  const sailMaterial = new THREE.MeshPhongMaterial({ 
+  // === WHITE SAILS THAT REACT TO WIND - SQUARE RIG STYLE ===
+  // Sails have yards (spars) at top and bottom, sides billow outward
+  
+  // Main sail - 3D yard arms
+  const mainSailGroup = new THREE.Group()
+  
+  // Top yard (horizontal spar)
+  const topYardGeom = new THREE.CylinderGeometry(0.08, 0.08, 6, 8)
+  const yardMat = new THREE.MeshPhongMaterial({ color: 0x654321 })
+  const topYard = new THREE.Mesh(topYardGeom, yardMat)
+  topYard.rotation.z = Math.PI / 2
+  topYard.position.y = 3.5
+  mainSailGroup.add(topYard)
+  
+  // Bottom yard
+  const botYard = new THREE.Mesh(topYardGeom, yardMat)
+  botYard.rotation.z = Math.PI / 2
+  botYard.position.y = -3.5
+  mainSailGroup.add(botYard)
+  
+  // The sail cloth - vertices organized so top row (y=max) and bottom row (y=min) stay fixed
+  const sailGeom = new THREE.PlaneGeometry(5.5, 7, 12, 14)
+  const sailMat = new THREE.MeshPhongMaterial({ 
     color: 0xffffff, 
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.95
   })
-  const sail = new THREE.Mesh(sailGeometry, sailMaterial)
-  sail.position.set(0, 8, -1.5) // Moved forward slightly
-  sail.rotation.y = Math.PI / 2
+  const sail = new THREE.Mesh(sailGeom, sailMat)
+  sail.position.set(0, 0, 0.05) // Slightly forward of yards
   sail.userData.isSail = true
-  sail.userData.originalVertices = sailGeometry.attributes.position.array.slice()
-  playerShip.add(sail)
+  sail.userData.originalVertices = sailGeom.attributes.position.array.slice()
+  // Store info about which vertices are fixed (top and bottom edges)
+  const mainSailVerts = sailGeom.attributes.position
+  sail.userData.fixedEdges = []
+  for (let i = 0; i < mainSailVerts.count; i++) {
+    const y = mainSailVerts.getY(i)
+    // Top and bottom rows are fixed to yards
+    if (Math.abs(y - 3.5) < 0.1 || Math.abs(y + 3.5) < 0.1) {
+      sail.userData.fixedEdges.push(true)
+    } else {
+      sail.userData.fixedEdges.push(false)
+    }
+  }
+  mainSailGroup.add(sail)
+  mainSailGroup.position.set(0, 8, -1.5)
+  playerShip.add(mainSailGroup)
 
-  // Fore sail (front jib) - white, more forward
-  const foreSailGeometry = new THREE.PlaneGeometry(3, 4, 10, 12)
-  const foreSailMaterial = new THREE.MeshPhongMaterial({ 
-    color: 0xffffff, 
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.95
-  })
-  const foreSail = new THREE.Mesh(foreSailGeometry, foreSailMaterial)
-  foreSail.position.set(0, 5, -3) // Moved forward
-  foreSail.rotation.y = Math.PI / 2
+  // Fore sail - 3D yard arms
+  const foreSailGroup = new THREE.Group()
+  const foreTopYardGeom = new THREE.CylinderGeometry(0.06, 0.06, 4, 8)
+  const foreTopYard = new THREE.Mesh(foreTopYardGeom, yardMat)
+  foreTopYard.rotation.z = Math.PI / 2
+  foreTopYard.position.y = 2
+  foreSailGroup.add(foreTopYard)
+  const foreBotYard = new THREE.Mesh(foreTopYardGeom, yardMat)
+  foreBotYard.rotation.z = Math.PI / 2
+  foreBotYard.position.y = -2
+  foreSailGroup.add(foreBotYard)
+  const foreSailGeom = new THREE.PlaneGeometry(3.5, 4, 10, 12)
+  const foreSailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
+  const foreSail = new THREE.Mesh(foreSailGeom, foreSailMat)
+  foreSail.position.set(0, 0, 0.05)
   foreSail.userData.isSail = true
-  foreSail.userData.originalVertices = foreSailGeometry.attributes.position.array.slice()
-  playerShip.add(foreSail)
+  foreSail.userData.originalVertices = foreSailGeom.attributes.position.array.slice()
+  foreSail.userData.fixedEdges = []
+  for (let i = 0; i < foreSailGeom.attributes.position.count; i++) {
+    const y = foreSailGeom.attributes.position.getY(i)
+    foreSail.userData.fixedEdges.push(Math.abs(y - 2) < 0.1 || Math.abs(y + 2) < 0.1)
+  }
+  foreSailGroup.add(foreSail)
+  foreSailGroup.position.set(0, 5, -3)
+  playerShip.add(foreSailGroup)
 
-  // Mizzen sail (back) - white
-  const mizzenGeometry = new THREE.PlaneGeometry(2.5, 3.5, 8, 10)
-  const mizzenMaterial = new THREE.MeshPhongMaterial({ 
-    color: 0xffffff, 
-    side: THREE.DoubleSide,
-    transparent: true,
-    opacity: 0.95
-  })
-  const mizzen = new THREE.Mesh(mizzenGeometry, mizzenMaterial)
-  mizzen.position.set(0, 6, 1) // Moved slightly forward from back
-  mizzen.rotation.y = Math.PI / 2
+  // Mizzen sail - 3D yard arms
+  const mizzenGroup = new THREE.Group()
+  const mizzenTopYardGeom = new THREE.CylinderGeometry(0.05, 0.05, 3.5, 8)
+  const mizzenTopYard = new THREE.Mesh(mizzenTopYardGeom, yardMat)
+  mizzenTopYard.rotation.z = Math.PI / 2
+  mizzenTopYard.position.y = 1.75
+  mizzenGroup.add(mizzenTopYard)
+  const mizzenBotYard = new THREE.Mesh(mizzenTopYardGeom, yardMat)
+  mizzenBotYard.rotation.z = Math.PI / 2
+  mizzenBotYard.position.y = -1.75
+  mizzenGroup.add(mizzenBotYard)
+  const mizzenGeom = new THREE.PlaneGeometry(3, 3.5, 8, 10)
+  const mizzenMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
+  const mizzen = new THREE.Mesh(mizzenGeom, mizzenMat)
+  mizzen.position.set(0, 0, 0.05)
   mizzen.userData.isSail = true
-  mizzen.userData.originalVertices = mizzenGeometry.attributes.position.array.slice()
-  playerShip.add(mizzen)
+  mizzen.userData.originalVertices = mizzenGeom.attributes.position.array.slice()
+  mizzen.userData.fixedEdges = []
+  for (let i = 0; i < mizzenGeom.attributes.position.count; i++) {
+    const y = mizzenGeom.attributes.position.getY(i)
+    mizzen.userData.fixedEdges.push(Math.abs(y - 1.75) < 0.1 || Math.abs(y + 1.75) < 0.1)
+  }
+  mizzenGroup.add(mizzen)
+  mizzenGroup.position.set(0, 6, 1)
+  playerShip.add(mizzenGroup)
+
+  // Store sails for wind animation
+  playerShip.userData.sails = [sail, foreSail, mizzen]
 
   // Store sails for wind animation
   playerShip.userData.sails = [sail, foreSail, mizzen]
@@ -748,35 +805,42 @@ function animateSails(dt) {
   const speedFactor = playerSpeed.value / 15 // 0 to 1 based on speed
   
   playerShip.userData.sails.forEach((sail, index) => {
-    if (!sail.userData.originalVertices) return
+    if (!sail.userData.originalVertices || !sail.userData.fixedEdges) return
     
     const positions = sail.geometry.attributes.position
     const original = sail.userData.originalVertices
+    const fixedEdges = sail.userData.fixedEdges
     
     for (let i = 0; i < positions.count; i++) {
-      const x = original[i * 3] // Horizontal position from center of sail
+      // Skip vertices on top and bottom edges (attached to yards)
+      if (fixedEdges[i]) continue
+      
+      const x = original[i * 3] // Horizontal position (-width/2 to +width/2)
       const y = original[i * 3 + 1] // Vertical position
       
       // x ranges from -width/2 to +width/2
-      // We want the sail to billow OUTWARD from the mast (which is at x=0)
-      // So we use abs(x) to make both sides billow outward
-      
-      const distFromMast = Math.abs(x) / 2.5 // Normalized distance from mast
+      // The sides (left and right edges) are free to billow
+      // distFromCenter: 0 at center (x=0), 1 at edges
+      const width = 5.5 / 2 // approximate
+      const distFromCenter = Math.abs(x) / width
       
       // === WIND BEHIND = FULL BELLY, CURVED SHAPE ===
       // Maximum billow when wind is behind and we're moving fast
-      const maxBillow = windBehind * windStrength * (1.2 + speedFactor * 0.8)
-      // Curved billow - more at center, less at edges (parabolic) - MORE DRAMATIC
-      const curvedBillow = distFromMast * maxBillow * (1.5 - distFromMast * 0.5)
+      // Billow in X direction (sideways from the mast)
+      const maxBillow = windBehind * windStrength * (1.5 + speedFactor * 1.0)
+      // Curved billow - full in middle, less at corners (parabolic)
+      // Only the vertical sides billow, not top/bottom
+      const curvedBillow = Math.pow(distFromCenter, 1.5) * maxBillow * 2
       
       // === WIND IN FRONT = FLUTTER, ALMOST NO VOLUME ===
-      // Sails luff and flutter when wind is against - very little billow
-      const flutterAmount = windAhead * 0.2 * (0.3 + speedFactor * 0.3)
-      const flutter = Math.sin(time * 8 + y * 0.8 + index * 2) * flutterAmount
+      // Sails luff and flutter when wind is against
+      const flutterAmount = windAhead * 0.25 * (0.2 + speedFactor * 0.3)
+      const flutter = Math.sin(time * 8 + y * 0.5 + index * 2) * flutterAmount
       
-      // Combine: curved billow when going with wind, flutter when against
-      // When going across wind, intermediate behavior
-      positions.array[i * 3 + 2] = curvedBillow + flutter
+      // Apply billow to X axis (sideways billow)
+      // Sign matches x direction so both sides billow outward
+      const direction = x >= 0 ? 1 : -1
+      positions.array[i * 3] = x + direction * curvedBillow + flutter
     }
     
     positions.needsUpdate = true
