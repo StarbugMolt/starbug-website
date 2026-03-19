@@ -231,13 +231,21 @@ function createPlayerShip() {
   mast.position.y = 7
   playerShip.add(mast)
 
-  // Sail
+  // Sail - RED for pirate ship!
   const sailGeometry = new THREE.PlaneGeometry(5, 7)
-  const sailMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide })
+  const sailMaterial = new THREE.MeshPhongMaterial({ color: 0x8B0000, side: THREE.DoubleSide })
   const sail = new THREE.Mesh(sailGeometry, sailMaterial)
   sail.position.set(0, 8, 0)
   sail.rotation.y = Math.PI / 2
   playerShip.add(sail)
+
+  // Second smaller sail (jib)
+  const jibGeometry = new THREE.PlaneGeometry(3, 4)
+  const jibMaterial = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide })
+  const jib = new THREE.Mesh(jibGeometry, jibMaterial)
+  jib.position.set(0, 5, -2)
+  jib.rotation.y = Math.PI / 2
+  playerShip.add(jib)
 
   // Flag
   const flagGeometry = new THREE.PlaneGeometry(1.5, 1)
@@ -247,7 +255,7 @@ function createPlayerShip() {
   flag.rotation.y = Math.PI / 2
   playerShip.add(flag)
 
-  // Cannon ports
+  // Cannon ports - now including bow (front) cannons
   for (let i = -1; i <= 1; i++) {
     const portGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.3)
     const portMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
@@ -257,6 +265,23 @@ function createPlayerShip() {
     playerShip.add(portL)
     
     const portR = new THREE.Mesh(portGeometry, portMaterial)
+    portR.position.set(1.5, 1.5, i * 2)
+    portR.rotation.z = Math.PI / 2
+    playerShip.add(portR)
+  }
+  
+  // Bow cannons (front) - more visible
+  const bowCannonGeom = new THREE.CylinderGeometry(0.15, 0.2, 1.2)
+  const bowCannonMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
+  const bowCannonL = new THREE.Mesh(bowCannonGeom, bowCannonMat)
+  bowCannonL.position.set(-0.8, 1.8, 3.5)
+  bowCannonL.rotation.x = Math.PI / 2
+  playerShip.add(bowCannonL)
+  
+  const bowCannonR = new THREE.Mesh(bowCannonGeom, bowCannonMat)
+  bowCannonR.position.set(0.8, 1.8, 3.5)
+  bowCannonR.rotation.x = Math.PI / 2
+  playerShip.add(bowCannonR)
     portR.position.set(1.5, 1.5, i * 2)
     portR.rotation.z = Math.PI / 2
     playerShip.add(portR)
@@ -401,29 +426,35 @@ function createKraken() {
 function fireCannon() {
   if (cannonCooldown.value > 0) return
   
-  cannonCooldown.value = 2
+  cannonCooldown.value = 1.5
   
-  // Create cannonball
-  const ballGeometry = new THREE.SphereGeometry(0.5, 8, 8)
-  const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
-  const ball = new THREE.Mesh(ballGeometry, ballMaterial)
-  
+  // Fire from BOTH sides of the bow (front)
   const angle = playerAngle
-  ball.position.set(
-    playerPos.value.x + Math.sin(angle) * 5,
-    2,
-    playerPos.value.z + Math.cos(angle) * 5
-  )
+  const frontOffset = 4 // Front of ship
   
-  const speed = 30
-  cannonballs.push({
-    mesh: ball,
-    vx: Math.sin(angle) * speed,
-    vz: Math.cos(angle) * speed,
-    life: 3
-  })
-  
-  scene.add(ball)
+  // Create two cannonballs - one from each side of the bow
+  for (let side = -1; side <= 1; side += 2) {
+    const ballGeometry = new THREE.SphereGeometry(0.4, 8, 8)
+    const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
+    const ball = new THREE.Mesh(ballGeometry, ballMaterial)
+    
+    // Fire from front of ship
+    ball.position.set(
+      playerPos.value.x + Math.cos(angle) * side * 1.5 + Math.sin(angle) * frontOffset,
+      2,
+      playerPos.value.z - Math.sin(angle) * side * 1.5 + Math.cos(angle) * frontOffset
+    )
+    
+    const speed = 35
+    cannonballs.push({
+      mesh: ball,
+      vx: Math.sin(angle) * speed,
+      vz: Math.cos(angle) * speed,
+      life: 3
+    })
+    
+    scene.add(ball)
+  }
 }
 
 function updateCannonballs(dt) {
