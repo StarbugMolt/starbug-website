@@ -525,7 +525,9 @@ function fireCannon() {
         mesh: ball,
         vx: Math.sin(angle + side * Math.PI / 2) * speed,
         vz: Math.cos(angle + side * Math.PI / 2) * speed,
-        life: 3
+        life: 3,
+        isPlayer: true,
+        spawnTime: Date.now()
       })
       
       scene.add(ball)
@@ -559,7 +561,8 @@ function fireEnemyCannon() {
       vx: Math.sin(angle + side * Math.PI / 2) * speed,
       vz: Math.cos(angle + side * Math.PI / 2) * speed,
       life: 3,
-      isEnemy: true
+      isEnemy: true,
+      spawnTime: Date.now()
     })
     
     scene.add(ball)
@@ -603,18 +606,22 @@ function updateCannonballs(dt) {
       }
     }
     
-    // Check collision with player (from both player and enemy cannons)
-    const pdx = ball.mesh.position.x - playerPos.value.x
-    const pdz = ball.mesh.position.z - playerPos.value.z
-    if (Math.sqrt(pdx * pdx + pdz * pdz) < 3) {
-      hp.value -= 10
-      showMessage('💥 You were hit!')
-      scene.remove(ball.mesh)
-      cannonballs.splice(i, 1)
-      if (hp.value <= 0) {
-        gameState.value = 'gameover'
+    // Check collision with player (from enemy cannons only - not your own!)
+    // Add grace period so your own cannons don't hit you
+    const age = (Date.now() - ball.spawnTime) / 1000
+    if (age > 0.3) {
+      const pdx = ball.mesh.position.x - playerPos.value.x
+      const pdz = ball.mesh.position.z - playerPos.value.z
+      if (Math.sqrt(pdx * pdx + pdz * pdz) < 3) {
+        hp.value -= 10
+        showMessage('💥 You were hit!')
+        scene.remove(ball.mesh)
+        cannonballs.splice(i, 1)
+        if (hp.value <= 0) {
+          gameState.value = 'gameover'
+        }
+        continue
       }
-      continue
     }
     
     if (ball.life <= 0) {
