@@ -133,7 +133,7 @@ function init() {
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x1a1a2e)
-  scene.fog = new THREE.Fog(0x1a1a2e, 1, 15)
+  scene.fog = new THREE.Fog(0x1a1a2e, 5, 40)
 
   // Camera
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100)
@@ -143,24 +143,31 @@ function init() {
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true })
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.setClearColor(0x1a1a2e)
 
-  // Lighting
-  const ambientLight = new THREE.AmbientLight(0x404060, 0.5)
+  // Lighting - brighter ambient
+  const ambientLight = new THREE.AmbientLight(0x606080, 0.8)
   scene.add(ambientLight)
 
-  // Flickering fluorescent lights
-  const light1 = new THREE.PointLight(0xffffaa, 1, 20)
-  light1.position.set(5, 2.5, 5)
-  scene.add(light1)
-  
-  const light2 = new THREE.PointLight(0xffffaa, 1, 20)
-  light2.position.set(mazeSize - 5, 2.5, mazeSize - 5)
-  scene.add(light2)
+  // Add lights throughout the maze
+  for (let i = 0; i < 10; i++) {
+    const x = (i % 5) * 5 + 2
+    const z = Math.floor(i / 5) * 8 + 2
+    const light = new THREE.PointLight(0xffffcc, 0.6, 12)
+    light.position.set(x, 2.8, z)
+    scene.add(light)
+    
+    // Light fixture visual
+    const fixtureGeometry = new THREE.BoxGeometry(0.8, 0.1, 0.3)
+    const fixtureMaterial = new THREE.MeshBasicMaterial({ color: 0xffffcc })
+    const fixture = new THREE.Mesh(fixtureGeometry, fixtureMaterial)
+    fixture.position.set(x, 2.95, z)
+    scene.add(fixture)
+  }
 
-  // Player light (flashlight)
-  const playerLight = new THREE.PointLight(0xffffff, 0.8, 15)
-  playerLight.position.copy(playerPos)
-  scene.add(playerLight)
+  // Player light (flashlight) - attached to camera
+  const playerLight = new THREE.PointLight(0xffffff, 1, 20)
+  playerLight.position.set(0, 0, 0)
   camera.add(playerLight)
   scene.add(camera)
 
@@ -189,9 +196,11 @@ function createMazeGeometry() {
   // Floor - industrial metal
   const floorGeometry = new THREE.PlaneGeometry(mazeSize, mazeSize)
   const floorMaterial = new THREE.MeshStandardMaterial({ 
-    color: 0x2a2a3a,
+    color: 0x3a3a4a,
     roughness: 0.8,
-    metalness: 0.3
+    metalness: 0.3,
+    emissive: 0x111118,
+    emissiveIntensity: 0.1
   })
   const floor = new THREE.Mesh(floorGeometry, floorMaterial)
   floor.rotation.x = -Math.PI / 2
@@ -207,9 +216,11 @@ function createMazeGeometry() {
   // Walls
   const wallGeometry = new THREE.BoxGeometry(1, 3, 1)
   const wallMaterial = new THREE.MeshStandardMaterial({
-    color: 0x3a3a4a,
+    color: 0x4a4a5a,
     roughness: 0.7,
-    metalness: 0.4
+    metalness: 0.4,
+    emissive: 0x111122,
+    emissiveIntensity: 0.2
   })
 
   // Pipe material for industrial look
