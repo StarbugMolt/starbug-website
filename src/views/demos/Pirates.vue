@@ -129,6 +129,9 @@ function init() {
 
   // Sky
   createSky()
+  
+  // Wind particles
+  createWindParticles()
 
   // Player ship
   createPlayerShip()
@@ -636,9 +639,10 @@ let pointerLocked = false
 
 function onMouseMove(e) {
   if (pointerLocked) {
-    // Use movementX for continuous rotation when pointer is locked
+    // Use movementX for continuous rotation when pointer is locked - no clamping!
     mouseX += e.movementX * 0.005
-    mouseX = Math.max(-1, Math.min(1, mouseX))
+    // Clamp to prevent going too far, but allow continuous turning
+    mouseX = Math.max(-2, Math.min(2, mouseX))
   } else {
     mouseX = (e.clientX / window.innerWidth) * 2 - 1
   }
@@ -659,11 +663,13 @@ function requestPointerLock() {
 
 function onClick() {
   if (gameState.value === 'playing') {
-    // Request pointer lock on first click if not locked
-    if (!pointerLocked && container.value) {
-      requestPointerLock()
-    }
+    // Fire cannon
     fireCannon()
+    
+    // Re-acquire pointer lock if lost (clicking might release it)
+    if (container.value && !pointerLocked) {
+      container.value.requestPointerLock()
+    }
   }
 }
 
@@ -686,6 +692,11 @@ function animateSails(dt) {
   const time = Date.now() * 0.001
   const windStrength = windSpeed.value / 6 // Normalize 0-1
   
+  // Calculate how aligned we are with wind (1 = perfect tailwind, -1 = perfect headwind)
+  const windAlignment = Math.cos(windAngle - playerAngle)
+  // More billowing when going fast with wind, less when slow/against wind
+  const speedFactor = playerSpeed.value / 20 // 0 to 1 based on speed
+  
   playerShip.userData.sails.forEach((sail, index) => {
     if (!sail.userData.originalVertices) return
     
@@ -696,14 +707,83 @@ function animateSails(dt) {
       const x = original[i * 3]
       const y = original[i * 3 + 1]
       
-      // Billowing effect - center of sail bulges out more
-      const bulge = Math.abs(x) / 2.5 * windStrength
-      const wave = Math.sin(time * 3 + y * 0.5 + index) * 0.3 * windStrength
+      // Billowing effect - more when going fast with wind, less when slow
+      const baseBillow = windStrength * (0.5 + speedFactor * 0.5)
+      const bulge = Math.abs(x) / 2.5 * baseBillow
+      
+      // Flapping when against wind or slow, smooth billowing when fast with wind
+      const flapAmount = windAlignment < 0.3 ? 0.4 : 0.15
+      const wave = Math.sin(time * 3 + y * 0.5 + index) * flapAmount * (1 - speedFactor * 0.5)
       
       positions.array[i * 3 + 2] = bulge + wave
     }
     
     positions.needsUpdate = true
+  })
+  
+  // Update wind particles
+  updateWindParticles(dt)
+}
+
+// Wind particles system
+let windParticles = []
+const maxWindParticles = 100
+
+function createWindParticles() {
+  for (let i = 0; i < maxWindParticles; i++) {
+    const geometry = new THREE.BufferGeometry()
+    const positions = new Float32Array(3)
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    
+    const material = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.AdditiveBlending
+    })
+    
+    const particle = new THREE.Points(geometry, material)
+    resetWindParticle(particle)
+    scene.add(particle)
+    windParticles.push(particle)
+  }
+}
+
+function resetWindParticle(particle) {
+  // Spawn particles around the player in a radius
+  const angle = Math.random() * Math.PI * 2
+  const radius = 30 + Math.random() * 20
+  particle.position.x = playerPos.value.x + Math.cos(angle) * radius
+  particle.position.y = 2 + Math.random() * 8
+  particle.position.z = playerPos.value.z + Math.sin(angle) * radius
+  particle.userData.life = 0
+  particle.userData.maxLife = 2 + Math.random() * 2
+}
+
+function updateWindParticles(dt) {
+  const time = Date.now() * 0.001
+  
+  windParticles.forEach(particle => {
+    particle.userData.life += dt
+    
+    // Move particles in wind direction
+    const speed = windSpeed.value * 2
+    particle.position.x += Math.sin(windAngle) * speed * dt
+    particle.position.z += Math.cos(windAngle) * speed * dt
+    
+    // Fade based on life
+    const lifeRatio = particle.userData.life / particle.userData.maxLife
+    particle.material.opacity = 0.4 * (1 - lifeRatio) * (windSpeed.value / 6)
+    
+    // Reset if too old or too far from player
+    const dx = particle.position.x - playerPos.value.x
+    const dz = particle.position.z - playerPos.value.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    
+    if (particle.userData.life > particle.userData.maxLife || dist > 60) {
+      resetWindParticle(particle)
+    }
   })
 }
 
