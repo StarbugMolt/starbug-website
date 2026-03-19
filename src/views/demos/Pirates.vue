@@ -270,18 +270,25 @@ function createPlayerShip() {
     playerShip.add(portR)
   }
   
-  // Bow cannons (front) - more visible
-  const bowCannonGeom = new THREE.CylinderGeometry(0.15, 0.2, 1.2)
-  const bowCannonMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
-  const bowCannonL = new THREE.Mesh(bowCannonGeom, bowCannonMat)
-  bowCannonL.position.set(-0.8, 1.8, 3.5)
-  bowCannonL.rotation.x = Math.PI / 2
-  playerShip.add(bowCannonL)
+  // Side cannons (port and starboard)
+  const sideCannonGeom = new THREE.CylinderGeometry(0.15, 0.2, 1.2)
+  const sideCannonMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
   
-  const bowCannonR = new THREE.Mesh(bowCannonGeom, bowCannonMat)
-  bowCannonR.position.set(0.8, 1.8, 3.5)
-  bowCannonR.rotation.x = Math.PI / 2
-  playerShip.add(bowCannonR)
+  // Port side cannons
+  for (let i = -1; i <= 1; i++) {
+    const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
+    cannon.position.set(-1.6, 1.8, i * 2)
+    cannon.rotation.z = Math.PI / 2
+    playerShip.add(cannon)
+  }
+  
+  // Starboard side cannons
+  for (let i = -1; i <= 1; i++) {
+    const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
+    cannon.position.set(1.6, 1.8, i * 2)
+    cannon.rotation.z = Math.PI / 2
+    playerShip.add(cannon)
+  }
     portR.position.set(1.5, 1.5, i * 2)
     portR.rotation.z = Math.PI / 2
     playerShip.add(portR)
@@ -428,28 +435,29 @@ function fireCannon() {
   
   cannonCooldown.value = 1.5
   
-  // Fire from BOTH sides of the bow (front)
+  // Fire from BOTH sides (port and starboard)
   const angle = playerAngle
-  const frontOffset = 4 // Front of ship
   
-  // Create two cannonballs - one from each side of the bow
+  // Create two cannonballs - one from each side
   for (let side = -1; side <= 1; side += 2) {
     const ballGeometry = new THREE.SphereGeometry(0.4, 8, 8)
     const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
     const ball = new THREE.Mesh(ballGeometry, ballMaterial)
     
-    // Fire from front of ship
+    // Fire from sides of the ship
+    const sideOffset = side * 2 // Distance from center to side
     ball.position.set(
-      playerPos.value.x + Math.cos(angle) * side * 1.5 + Math.sin(angle) * frontOffset,
+      playerPos.value.x + Math.sin(angle) * sideOffset,
       2,
-      playerPos.value.z - Math.sin(angle) * side * 1.5 + Math.cos(angle) * frontOffset
+      playerPos.value.z + Math.cos(angle) * sideOffset
     )
     
     const speed = 35
+    // Fire perpendicular to ship (outward from sides)
     cannonballs.push({
       mesh: ball,
-      vx: Math.sin(angle) * speed,
-      vz: Math.cos(angle) * speed,
+      vx: Math.sin(angle + side * Math.PI / 2) * speed,
+      vz: Math.cos(angle + side * Math.PI / 2) * speed,
       life: 3
     })
     
