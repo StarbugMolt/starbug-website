@@ -660,8 +660,8 @@ function onMouseMove(e) {
   // Always accumulate mouse movement when game is playing
   // This works because pointer lock captures all mouse movement
   if (gameState.value === 'playing') {
-    // Reduced sensitivity for smoother turning
-    mouseDeltaX += e.movementX * 0.001
+    // Very low sensitivity for big ship feel
+    mouseDeltaX += e.movementX * 0.0003
   }
 }
 
@@ -872,7 +872,8 @@ function update(dt) {
   }
   
   // Ease player angle towards target rotation (smooth turning)
-  const turnSpeed = 3.0 // How fast the boat actually turns
+  // Big ship takes time to react and turn
+  const turnSpeed = 1.0 // How fast the boat actually turns (lower = more lag)
   const angleDiff = targetRotation - playerAngle
   if (Math.abs(angleDiff) > 0.001) {
     playerAngle += angleDiff * turnSpeed * dt
@@ -886,11 +887,12 @@ function update(dt) {
   const targetSpeed = minSpeed + (maxSpeed - minSpeed) * Math.max(0, (windDir + 1) / 2)
   
   // Gradually accelerate/decelerate toward target speed (momentum)
-  const acceleration = 2.0 // How fast we change speed
+  // Big heavy ship takes a long time to speed up and slow down
+  const acceleration = 0.5 // How fast we change speed (lower = heavier feel)
   if (playerSpeed.value < targetSpeed) {
     playerSpeed.value = Math.min(targetSpeed, playerSpeed.value + acceleration * dt)
   } else {
-    playerSpeed.value = Math.max(targetSpeed, playerSpeed.value - acceleration * 0.5 * dt)
+    playerSpeed.value = Math.max(targetSpeed, playerSpeed.value - acceleration * 0.3 * dt)
   }
   
   // Apply momentum to position

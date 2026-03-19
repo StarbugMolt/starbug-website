@@ -475,9 +475,10 @@ function update(time) {
     moveX /= len
     moveZ /= len
 
-    // Rotate by camera angle
-    const sin = Math.sin(playerAngle)
-    const cos = Math.cos(playerAngle)
+    // Rotate by NEGATIVE camera angle (to move in direction we're looking)
+    const angle = -playerAngle
+    const sin = Math.sin(angle)
+    const cos = Math.cos(angle)
     const dx = moveX * cos - moveZ * sin
     const dz = moveX * sin + moveZ * cos
 
