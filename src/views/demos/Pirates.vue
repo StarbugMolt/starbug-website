@@ -20,7 +20,7 @@
     <canvas ref="canvas"></canvas>
 
     <div class="controls">
-      <div class="control-hint">🎯 Click to lock | Move mouse to steer | LMB=Starboard | RMB=Port | Avoid rocks!</div>
+      <div class="control-hint">🎯 Click to lock | Move mouse to steer | LMB=Starboard | RMB=Port | 🖱️ Scroll = Camera | Avoid rocks!</div>
     </div>
 
     <div class="overlay" v-if="gameState === 'start'">
@@ -83,6 +83,10 @@ let windChangeTimer = 0
 
 // Projectiles
 let cannonballs = []
+
+// Ship wake/trail particles
+let playerWake = []
+const maxWakeParticles = 50
 
 // Enemy ship
 const enemyShip = ref({ x: 100, z: -100, hp: 100, angle: 0 })
@@ -161,30 +165,59 @@ function init() {
 }
 
 function createOcean() {
-  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 100, 100)
+  // Base ocean - dark blue
+  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 80, 80)
   const oceanMaterial = new THREE.MeshPhongMaterial({
     color: 0x006994,
-    shininess: 100,
+    shininess: 150,
     transparent: true,
-    opacity: 0.9
+    opacity: 0.95
   })
   ocean = new THREE.Mesh(oceanGeometry, oceanMaterial)
   ocean.rotation.x = -Math.PI / 2
-  ocean.position.y = 0
+  ocean.position.y = -0.5
+  ocean.userData.originalPositions = oceanGeometry.attributes.position.array.slice()
   scene.add(ocean)
 
-  // Add waves
-  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 50, 50)
+  // Animated wave layer
+  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 60, 60)
   const waveMaterial = new THREE.MeshPhongMaterial({
     color: 0x00aadd,
+    shininess: 200,
     transparent: true,
-    opacity: 0.3,
-    wireframe: true
+    opacity: 0.4,
+    side: THREE.DoubleSide
   })
   const waves = new THREE.Mesh(waveGeometry, waveMaterial)
   waves.rotation.x = -Math.PI / 2
-  waves.position.y = 0.5
+  waves.position.y = 0
+  waves.userData.originalPositions = waveGeometry.attributes.position.array.slice()
   scene.add(waves)
+  ocean = waves // Track this for animation
+
+  // Store original positions for wave animation
+  ocean.userData.originalPositions = waveGeometry.attributes.position.array.slice()
+}
+
+// Animate ocean waves
+function animateOceanWaves(time) {
+  if (!ocean || !ocean.userData.originalPositions) return
+  
+  const positions = ocean.geometry.attributes.position
+  const original = ocean.userData.originalPositions
+  
+  for (let i = 0; i < positions.count; i++) {
+    const x = original[i * 3]
+    const z = original[i * 3 + 2]
+    
+    // Multiple wave frequencies for realistic ocean
+    const wave1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(z * 0.02 + time * 0.3) * 0.8
+    const wave2 = Math.sin(x * 0.05 + time * 0.8) * 0.3
+    const wave3 = Math.sin(z * 0.03 + time * 0.4) * 0.5
+    
+    positions.array[i * 3 + 1] = wave1 + wave2 + wave3
+  }
+  positions.needsUpdate = true
 }
 
 function createSky() {
@@ -226,32 +259,126 @@ function createSky() {
 function createPlayerShip() {
   playerShip = new THREE.Group()
 
-  // Hull
-  const hullGeometry = new THREE.BoxGeometry(3, 2, 8)
-  const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
+  // === IMPROVED HULL - Tapered shape ===
+  // Main hull body (tapered)
+  const hullShape = new THREE.Shape()
+  hullShape.moveTo(-1.5, -4)
+  hullShape.lineTo(1.5, -4)
+  hullShape.lineTo(1.8, 0)
+  hullShape.lineTo(1.5, 4)
+  hullShape.lineTo(-1.5, 4)
+  hullShape.lineTo(-1.8, 0)
+  hullShape.closePath()
+  
+  const extrudeSettings = { depth: 2, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.1, bevelSegments: 2 }
+  const hullGeometry = new THREE.ExtrudeGeometry(hullShape, extrudeSettings)
+  const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x5C3317 }) // Darker wood
   const hull = new THREE.Mesh(hullGeometry, hullMaterial)
-  hull.position.y = 1
+  hull.rotation.x = -Math.PI / 2
+  hull.position.y = 0.5
   playerShip.add(hull)
 
-  // Deck
-  const deckGeometry = new THREE.BoxGeometry(2.5, 0.3, 7)
-  const deckMaterial = new THREE.MeshPhongMaterial({ color: 0xDEB887 })
+  // Hull stripe (decorative)
+  const stripeGeometry = new THREE.BoxGeometry(3.2, 0.15, 8.5)
+  const stripeMaterial = new THREE.MeshPhongMaterial({ color: 0x8B0000 }) // Red stripe
+  const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial)
+  stripe.position.y = 1.3
+  playerShip.add(stripe)
+
+  // Deck with planks effect
+  const deckGeometry = new THREE.BoxGeometry(2.8, 0.25, 7.5)
+  const deckMaterial = new THREE.MeshPhongMaterial({ color: 0xDEB887 }) // Burlywood
   const deck = new THREE.Mesh(deckGeometry, deckMaterial)
-  deck.position.y = 2.2
+  deck.position.y = 2.1
   playerShip.add(deck)
 
-  // Main mast
-  const mastGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10)
-  const mastMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 })
-  const mast = new THREE.Mesh(mastGeometry, mastMaterial)
-  mast.position.y = 7
-  playerShip.add(mast)
+  // === RAILINGS ===
+  const railMaterial = new THREE.MeshPhongMaterial({ color: 0x3D2817 })
+  // Port side railing
+  for (let i = 0; i < 8; i++) {
+    const railPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1), railMaterial)
+    railPost.position.set(-1.3, 2.7, -3 + i * 0.85)
+    playerShip.add(railPost)
+  }
+  // Starboard side railing
+  for (let i = 0; i < 8; i++) {
+    const railPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1), railMaterial)
+    railPost.position.set(1.3, 2.7, -3 + i * 0.85)
+    playerShip.add(railPost)
+  }
+  // Railings top bar
+  const railBarGeom = new THREE.CylinderGeometry(0.03, 0.03, 7, 8)
+  const railBarL = new THREE.Mesh(railBarGeom, railMaterial)
+  railBarL.rotation.x = Math.PI / 2
+  railBarL.position.set(-1.3, 3.2, 0)
+  playerShip.add(railBarL)
+  const railBarR = new THREE.Mesh(railBarGeom, railMaterial)
+  railBarR.rotation.x = Math.PI / 2
+  railBarR.position.set(1.3, 3.2, 0)
+  playerShip.add(railBarR)
 
-  // Fore mast (front)
-  const foreMastGeometry = new THREE.CylinderGeometry(0.15, 0.15, 6)
-  const foreMast = new THREE.Mesh(foreMastGeometry, mastMaterial)
+  // === MASTS ===
+  const mastMaterial = new THREE.MeshPhongMaterial({ color: 0x4A3728 })
+  
+  // Main mast - thicker
+  const mainMastGeom = new THREE.CylinderGeometry(0.25, 0.3, 12, 8)
+  const mainMast = new THREE.Mesh(mainMastGeom, mastMaterial)
+  mainMast.position.y = 7.5
+  playerShip.add(mainMast)
+
+  // Main mast crosstree (supports the yard)
+  const crosstreeGeom = new THREE.BoxGeometry(7, 0.15, 0.15)
+  const crosstree = new THREE.Mesh(crosstreeGeom, mastMaterial)
+  crosstree.position.set(0, 12.5, 0)
+  playerShip.add(crosstree)
+
+  // Crow's nest
+  const nestGeom = new THREE.CylinderGeometry(0.5, 0.6, 0.4, 8, 1, true)
+  const nest = new THREE.Mesh(nestGeom, railMaterial)
+  nest.position.set(0, 13, 0)
+  playerShip.add(nest)
+  // Nest floor
+  const nestFloorGeom = new THREE.CircleGeometry(0.55, 8)
+  const nestFloor = new THREE.Mesh(nestFloorGeom, deckMaterial)
+  nestFloor.rotation.x = -Math.PI / 2
+  nestFloor.position.y = -0.2
+  nest.add(nestFloor)
+
+  // Fore mast
+  const foreMastGeom = new THREE.CylinderGeometry(0.18, 0.22, 7, 8)
+  const foreMast = new THREE.Mesh(foreMastGeom, mastMaterial)
   foreMast.position.set(0, 5, -2.5)
   playerShip.add(foreMast)
+
+  // Mizzen mast (rear)
+  const mizzenMastGeom = new THREE.CylinderGeometry(0.12, 0.15, 5, 8)
+  const mizzenMast = new THREE.Mesh(mizzenMastGeom, mastMaterial)
+  mizzenMast.position.set(0, 4.5, 2.5)
+  playerShip.add(mizzenMast)
+
+  // === FIGUREHEAD (bow decoration) ===
+  const figureheadMat = new THREE.MeshPhongMaterial({ color: 0xD2691E })
+  // Dragon head
+  const dragonHead = new THREE.Group()
+  const headGeom = new THREE.ConeGeometry(0.4, 1.2, 6)
+  const head = new THREE.Mesh(headGeom, figureheadMat)
+  head.rotation.x = Math.PI / 2
+  head.position.z = 0.4
+  dragonHead.add(head)
+  // Snout
+  const snoutGeom = new THREE.ConeGeometry(0.2, 0.5, 6)
+  const snout = new THREE.Mesh(snoutGeom, figureheadMat)
+  snout.rotation.x = -Math.PI / 2
+  snout.position.set(0, 0, 1)
+  dragonHead.add(snout)
+  dragonHead.position.set(0, 1.8, 4.5)
+  playerShip.add(dragonHead)
+
+  // === STERN DECORATION ===
+  const sternMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
+  const sternPanel = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.5, 0.1), sternMat)
+  sternPanel.position.set(0, 2.8, -4)
+  playerShip.add(sternPanel)
 
   // === WHITE SAILS THAT REACT TO WIND - SQUARE RIG STYLE ===
   // Sails have yards (spars) at top and bottom, sides billow outward
@@ -780,6 +907,19 @@ function onContextMenu(e) {
   }
 }
 
+function onWheel(e) {
+  // Scroll up = more top-down (fighting), scroll down = more behind (navigation)
+  if (e.deltaY < 0) {
+    cameraMode = Math.min(1, cameraMode + 0.1)
+  } else {
+    cameraMode = Math.max(0, cameraMode - 0.1)
+  }
+  
+  const modeNames = ['🚢 Navigation', '⚔️ Combat']
+  const currentMode = cameraMode > 0.5 ? 1 : 0
+  showMessage(`📷 ${modeNames[currentMode]} view`, 1500)
+}
+
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
@@ -1006,10 +1146,21 @@ function update(dt) {
   playerShip.position.z = playerPos.value.z
   playerShip.rotation.y = playerAngle
   
-  // Camera follow
-  camera.position.x = playerPos.value.x - Math.sin(playerAngle) * 40
-  camera.position.z = playerPos.value.z - Math.cos(playerAngle) * 40
-  camera.position.y = 30
+  // Camera follow - interpolate between behind view and top-down based on cameraMode
+  // Behind view (navigation): close behind, lower angle
+  const behindDist = 35
+  const behindHeight = 20
+  // Top-down view (combat): high above, looking down
+  const topDownDist = 60
+  const topDownHeight = 80
+  
+  // Interpolate based on cameraMode
+  const dist = behindDist + (topDownDist - behindDist) * cameraMode
+  const height = behindHeight + (topDownHeight - behindHeight) * cameraMode
+  
+  camera.position.x = playerPos.value.x - Math.sin(playerAngle) * dist
+  camera.position.z = playerPos.value.z - Math.cos(playerAngle) * dist
+  camera.position.y = height
   camera.lookAt(playerPos.value.x, 0, playerPos.value.z)
   
   // Island collision
@@ -1085,6 +1236,11 @@ function update(dt) {
     const enemySpeed = obstacleAhead ? 3 : 6
     enemyShip.value.x += Math.sin(enemyShip.value.angle) * enemySpeed * dt
     enemyShip.value.z += Math.cos(enemyShip.value.angle) * enemySpeed * dt
+    
+    // Enemy wake
+    if (enemySpeed > 2 && Math.random() < 0.1) {
+      spawnWakeParticle(enemyShip.value.x, enemyShip.value.z, enemyShip.value.angle, true)
+    }
     
     // Keep in bounds
     const maxDist = 550
@@ -1189,7 +1345,68 @@ function update(dt) {
   
   // Animate ocean waves
   if (ocean) {
-    ocean.position.y = Math.sin(Date.now() * 0.001) * 0.5
+    animateOceanWaves(Date.now() * 0.001)
+  }
+  
+  // === SHIP WAKE TRAIL ===
+  // Spawn wake particles based on speed
+  if (playerSpeed.value > 1) {
+    // Spawn rate based on speed
+    const spawnChance = playerSpeed.value / 20
+    if (Math.random() < spawnChance) {
+      spawnWakeParticle(playerPos.value.x, playerPos.value.z, playerAngle, false)
+    }
+  }
+  updateWakeParticles(dt)
+}
+
+// Wake particle functions
+function spawnWakeParticle(x, z, angle, isEnemy) {
+  const wakeGeom = new THREE.SphereGeometry(0.3, 6, 6)
+  const wakeMat = new THREE.MeshBasicMaterial({ 
+    color: 0xffffff, 
+    transparent: true, 
+    opacity: 0.6 
+  })
+  const wake = new THREE.Mesh(wakeGeom, wakeMat)
+  
+  // Position behind the ship
+  const offset = isEnemy ? 5 : 5
+  const sideOffset = (Math.random() - 0.5) * 2 // Random side
+  wake.position.set(
+    x - Math.sin(angle) * offset + Math.cos(angle) * sideOffset,
+    0.3,
+    z - Math.cos(angle) * offset - Math.sin(angle) * sideOffset
+  )
+  
+  scene.add(wake)
+  playerWake.push({
+    mesh: wake,
+    life: 2 + Math.random() // 2-3 seconds
+  })
+  
+  // Limit particles
+  while (playerWake.length > maxWakeParticles) {
+    const old = playerWake.shift()
+    scene.remove(old.mesh)
+  }
+}
+
+function updateWakeParticles(dt) {
+  for (let i = playerWake.length - 1; i >= 0; i--) {
+    const p = playerWake[i]
+    p.life -= dt
+    
+    // Expand and fade
+    const scale = 1 + (2 - p.life) * 0.5
+    p.mesh.scale.setScalar(scale)
+    p.mesh.material.opacity = (p.life / 3) * 0.5
+    p.mesh.position.y = 0.3 + Math.sin(Date.now() * 0.005 + i) * 0.2
+    
+    if (p.life <= 0) {
+      scene.remove(p.mesh)
+      playerWake.splice(i, 1)
+    }
   }
 }
 
@@ -1210,6 +1427,7 @@ function startGame() {
   mouseDeltaX = 0
   turnAccumulator = 0
   targetRotation = 0
+  cameraMode = 0 // Reset to behind view
   
   // Reset
   hp.value = 100
@@ -1236,6 +1454,10 @@ function startGame() {
   cannonballs.forEach(b => scene.remove(b.mesh))
   cannonballs = []
   
+  // Clear wake particles
+  playerWake.forEach(w => scene.remove(w.mesh))
+  playerWake = []
+  
   victory.value = false
   gameState.value = 'playing'
   showMessage('⚔️ Battle commenced!', 3000)
@@ -1254,6 +1476,7 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', onMouseDown)
   window.removeEventListener('contextmenu', onContextMenu)
   window.removeEventListener('pointerlockchange', onPointerLockChange)
+  window.removeEventListener('wheel', onWheel)
   if (document.pointerLockElement) {
     document.exitPointerLock()
   }
