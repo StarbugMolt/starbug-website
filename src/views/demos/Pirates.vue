@@ -657,23 +657,27 @@ let mouseDeltaX = 0 // Track mouse movement for steering
 let pointerLocked = false
 
 function onMouseMove(e) {
-  if (pointerLocked) {
-    // Accumulate mouse movement for steering
-    mouseDeltaX += e.movementX * 0.003
+  // Always accumulate mouse movement when game is playing
+  // This works because pointer lock captures all mouse movement
+  if (gameState.value === 'playing') {
+    mouseDeltaX += e.movementX * 0.005
   }
 }
 
 function onPointerLockChange() {
-  pointerLocked = document.pointerLockElement === container.value
+  pointerLocked = document.pointerLockElement !== null
   if (pointerLocked) {
     mouseDeltaX = 0 // Reset on lock
     showMessage('🎯 Pointer locked - move mouse to steer', 2000)
+  } else {
+    showMessage('⚠️ Pointer unlocked - click to re-lock', 2000)
   }
 }
 
 function requestPointerLock() {
-  if (container.value && !pointerLocked) {
-    container.value.requestPointerLock()
+  // Request on canvas element
+  if (canvas.value) {
+    canvas.value.requestPointerLock()
   }
 }
 
@@ -857,10 +861,13 @@ function update(dt) {
   
   // === GRADUAL STEERING WITH MOUSE ===
   // Apply mouse delta to rotation (continuous turning when pointer locked)
-  if (pointerLocked) {
+  // Also apply steering even if pointer lock state is uncertain
+  if (mouseDeltaX !== 0) {
     playerAngle += mouseDeltaX
     // Decay the mouse delta (feels more natural)
-    mouseDeltaX *= 0.9
+    mouseDeltaX *= 0.85
+    // Clear if very small
+    if (Math.abs(mouseDeltaX) < 0.001) mouseDeltaX = 0
   }
   
   // === MOMENTUM-BASED SPEED PHYSICS ===
