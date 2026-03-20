@@ -143,6 +143,7 @@ const kraken = ref({ x: 0, z: 0, hp: 150, angle: 0, tentacles: [] })
 let krakenMesh
 let krakenActive = false
 let krakenTimer = 0
+let frameCount = 0 // For throttling updates
 
 // Islands and rocks
 let islands = []
@@ -1349,6 +1350,15 @@ function fireEnemyCannonMulti(enemy, shipType, enemyIndex) {
 function updateCannonballs(dt) {
   for (let i = cannonballs.length - 1; i >= 0; i--) {
     const ball = cannonballs[i]
+    
+    // Performance: Cull distant cannonballs
+    const distToPlayerSq = (ball.mesh.position.x - playerPos.value.x) ** 2 + (ball.mesh.position.z - playerPos.value.z) ** 2
+    if (distToPlayerSq > CANNONBALL_CULL_DIST * CANNONBALL_CULL_DIST) {
+      scene.remove(ball.mesh)
+      cannonballs.splice(i, 1)
+      continue
+    }
+    
     ball.mesh.position.x += ball.vx * dt
     ball.mesh.position.z += ball.vz * dt
     ball.life -= dt
@@ -1671,6 +1681,7 @@ const INACTIVE_DIST = 300
 const ACTIVE_DIST = 400
 const KRAKEN_INACTIVE_DIST = 300
 const KRAKEN_RENDER_DIST = 300
+const CANNONBALL_CULL_DIST = 300
 
 function createWindParticles() {
   for (let i = 0; i < maxWindParticles; i++) {
@@ -1993,6 +2004,8 @@ function update(dt) {
   }
   
   // === MULTIPLE ENEMY SHIPS AI ===
+  // Performance: Throttle AI updates to every 2nd frame
+  const aiThrottle = frameCount % 2 === 0
   enemyShips.value.forEach((enemy, index) => {
     if (enemy.hp <= 0) return // Skip destroyed ships
     
@@ -2005,10 +2018,19 @@ function update(dt) {
     const dx = playerPos.value.x - enemy.x
     const dz = playerPos.value.z - enemy.z
     const distToPlayerSq = dx * dx + dz * dz
-    const distToPlayer = Math.sqrt(distToPlayerSq)
     
+    // Skip AI for very distant enemies (already handled above, but double-check)
+    if (distToPlayerSq > ACTIVE_DIST * ACTIVE_DIST) return
+    
+    // Performance: Throttle AI updates
+    if (!aiThrottle) {
+      mesh.position.x = enemy.x
+      mesh.position.z = enemy.z
+      mesh.rotation.y = enemy.angle
+      return
+    }
     // Performance: Skip AI for distant enemies
-    if (distToPlayer > ACTIVE_DIST) {
+    if (Math.sqrt(distToPlayerSq) > ACTIVE_DIST) {
       // Just render stationary placeholder - no AI, no physics
       mesh.visible = distToPlayer <= ACTIVE_DIST + 100 // Fade out
       mesh.position.x = enemy.x
@@ -2616,6 +2638,7 @@ function animate() {
   animationId = requestAnimationFrame(animate)
   
   const dt = 1 / 60
+  frameCount++
   update(dt)
   
   renderer.render(scene, camera)

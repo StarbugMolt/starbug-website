@@ -22,6 +22,10 @@
 - **> KRAKEN_RENDER_DIST (300)**: Point only, reduced AI (random movement only), no 3D mesh
 - **< KRAKEN_RENDER_DIST (300)**: Full render + full AI
 
+### Cannonballs
+- **> CANNONBALL_CULL_DIST (300)**: Immediately removed from scene
+- Only process collision checks for nearby cannonballs
+
 ### Procedural World
 - Chunks already limited to 9x9 (~1800 units visible)
 - Objects beyond 5 chunks cleaned up (1000 units)
