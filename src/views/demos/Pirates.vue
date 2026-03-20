@@ -980,7 +980,9 @@ function spawnTreasure(x, z) {
     mesh: chest,
     ringMesh: ring,
     timer: 60, // 60 seconds
-    collecting: false
+    collecting: false,
+    collected: false,
+    collectFade: 1.0
   }
   
   showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
@@ -1400,6 +1402,37 @@ function updateTreasure(dt) {
   
   const t = treasure.value
   
+  // Handle collected state - fade out and remove
+  if (t.collected) {
+    t.collectFade -= dt * 2 // Fade out over ~0.5 seconds
+    if (t.mesh) {
+      t.mesh.scale.setScalar(t.collectFade)
+      t.mesh.position.y += dt * 2 // Float up
+    }
+    if (t.ringMesh) {
+      t.ringMesh.scale.setScalar(t.collectFade)
+    }
+    
+    if (t.collectFade <= 0) {
+      // Fully remove
+      if (t.mesh) {
+        scene.remove(t.mesh)
+        t.mesh.geometry?.dispose()
+        t.mesh.material?.dispose()
+      }
+      if (t.ringMesh) {
+        scene.remove(t.ringMesh)
+        t.ringMesh.geometry?.dispose()
+        t.ringMesh.material?.dispose()
+      }
+      treasure.value = null
+      treasureCollectTimer = 0
+      return
+    }
+    // Skip rest of update while fading
+    return
+  }
+  
   // Update timer
   t.timer -= dt
   
@@ -1428,22 +1461,10 @@ function updateTreasure(dt) {
       gold.value += coins
       showMessage(`💰 +${coins} Gold!`, 3000)
       
-      // Remove treasure meshes from scene
-      if (t.mesh) {
-        scene.remove(t.mesh)
-        t.mesh.geometry?.dispose()
-        t.mesh.material?.dispose()
-      }
-      if (t.ringMesh) {
-        scene.remove(t.ringMesh)
-        t.ringMesh.geometry?.dispose()
-        t.ringMesh.material?.dispose()
-      }
-      
-      // Clear treasure reference completely
-      treasure.value = null
-      treasureCollectTimer = 0
-      return // Stop processing
+      // Start fade out animation
+      t.collected = true
+      t.collectFade = 1.0
+      return
     }
   } else {
     t.collecting = false
