@@ -1557,9 +1557,17 @@ function update(dt) {
       // Normal ships try to get in front for broadside
       targetAngle = Math.atan2(dx, dz) + Math.PI // Stay behind player
     } else if (enemy.type === 'BIG') {
-      // Big ships move slowly, try to flank
-      const flankAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.5 : -0.5)
-      targetAngle = flankAngle
+      // Big ships - approach slowly but steadily, try to broadside
+      if (distToPlayer > 40) {
+        // Too far - move toward player
+        targetAngle = Math.atan2(dx, dz)
+      } else if (distToPlayer < 20) {
+        // Too close - back off slightly
+        targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
+      } else {
+        // Good range - circle around for broadside
+        targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.8 : -0.8)
+      }
     }
     
     // Check for obstacles ahead
