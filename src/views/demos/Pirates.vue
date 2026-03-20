@@ -653,6 +653,48 @@ function spawnEnemyShip() {
     { x: 100, z: -300 }
   ]
   
+  // Validate positions - make sure they're not on islands/rocks
+  for (let i = 0; i < positions.length; i++) {
+    let valid = false
+    let attempts = 0
+    let pos = { ...positions[i] }
+    
+    while (!valid && attempts < 20) {
+      valid = true
+      
+      // Check islands
+      for (const island of worldObjects.islands) {
+        const dx = pos.x - island.x
+        const dz = pos.z - island.z
+        if (Math.sqrt(dx * dx + dz * dz) < island.radius + 20) {
+          valid = false
+          break
+        }
+      }
+      
+      // Check rocks
+      if (valid) {
+        for (const rock of worldObjects.rocks) {
+          const dx = pos.x - rock.x
+          const dz = pos.z - rock.z
+          if (Math.sqrt(dx * dx + dz * dz) < rock.radius + 10) {
+            valid = false
+            break
+          }
+        }
+      }
+      
+      if (!valid) {
+        pos.x = (Math.random() - 0.5) * 400
+        pos.z = (Math.random() - 0.5) * 400 - 100
+        if (Math.sqrt(pos.x * pos.x + pos.z * pos.z) < 150) valid = false
+      }
+      
+      attempts++
+    }
+    positions[i] = pos
+  }
+  
   types.forEach((type, index) => {
     const shipType = SHIP_TYPES[type]
     const pos = positions[index]
@@ -1068,6 +1110,26 @@ function spawnChunk(cx, cz) {
           const dx = sx - enemy.x
           const dz = sz - enemy.z
           if (Math.sqrt(dx * dx + dz * dz) < 30) {
+            valid = false
+            break
+          }
+        }
+        
+        // Check distance from islands
+        for (const island of worldObjects.islands) {
+          const dx = sx - island.x
+          const dz = sz - island.z
+          if (Math.sqrt(dx * dx + dz * dz) < island.radius + 15) {
+            valid = false
+            break
+          }
+        }
+        
+        // Check distance from rocks
+        for (const rock of worldObjects.rocks) {
+          const dx = sx - rock.x
+          const dz = sz - rock.z
+          if (Math.sqrt(dx * dx + dz * dz) < rock.radius + 8) {
             valid = false
             break
           }
