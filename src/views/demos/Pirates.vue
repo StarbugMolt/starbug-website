@@ -900,23 +900,29 @@ function createKraken() {
   eyeR.position.set(4, 5, 8)
   krakenMesh.add(eyeR)
   
-  // Longer, animated tentacles
+  // Animated tentacles attached to body
   kraken.value.tentacles = []
-  for (let i = 0; i < 10; i++) {
-    const tentGeom = new THREE.CylinderGeometry(0.4, 1.8, 30, 8)
+  for (let i = 0; i < 8; i++) {
+    const tentGeom = new THREE.CylinderGeometry(0.5, 2, 25, 8)
     const tentMat = new THREE.MeshPhongMaterial({ color: 0x1a3030 })
     const tent = new THREE.Mesh(tentGeom, tentMat)
     
-    const angle = (i / 10) * Math.PI * 2
+    const angle = (i / 8) * Math.PI * 2
     tent.userData.baseAngle = angle
-    tent.userData.baseX = Math.cos(angle) * 8
-    tent.userData.baseZ = Math.sin(angle) * 8
+    tent.userData.angle = angle
+    // Start above water, angled outward
+    tent.position.set(Math.cos(angle) * 6, 12, Math.sin(angle) * 6)
+    tent.rotation.x = Math.PI / 2 - 0.3 // Point upward/outward
+    tent.rotation.z = -Math.cos(angle) * 0.3
+    
     tent.userData.phase = Math.random() * Math.PI * 2
     tent.userData.speed = 1 + Math.random() * 0.5
-    tent.userData.reachingForPlayer = false
-    tent.userData.reachTimer = 0
+    tent.userData.smashing = false
+    tent.userData.smashTimer = 0
+    tent.userData.smashCooldown = 0
+    tent.userData.smashDuration = 0
+    tent.userData.originalY = tent.position.y
     
-    tent.position.set(tent.userData.baseX, 5, tent.userData.baseZ)
     krakenMesh.add(tent)
     kraken.value.tentacles.push(tent)
   }
@@ -1937,38 +1943,72 @@ function update(dt) {
       playerSpeed.value *= slowFactor
     }
     
-    // === ANIMATED TENTACLES - Reach for player ===
+    // === ANIMATED TENTACLES - Smash attack ===
     const time = Date.now() * 0.001
     
+    // Check if any tentacle is currently smashing
+    const anySmashing = kraken.value.tentacles.some(t => t.userData.smashing)
+    
     kraken.value.tentacles.forEach((tent, i) => {
-      // Base waving motion
-      let waveAngle = Math.PI / 4 + Math.sin(time * tent.userData.speed + tent.userData.phase) * 0.4
-      
-      // If player is close, tentacles reach for them
-      const angleToPlayer = Math.atan2(dx, dz)
-      const tentBaseAngle = tent.userData.baseAngle
-      
-      // Check if this tentacle is facing player
-      let angleDiff = angleToPlayer - tentBaseAngle
-      // Normalize angle
-      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
-      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2
-      
-      // If player is in front of this tentacle, reach for them
-      if (dist < 40 && Math.abs(angleDiff) < 0.8) {
-        // Reach forward toward player
-        const reachAmount = (1 - dist / 40) * 1.2
-        waveAngle -= reachAmount // Point more toward player
-        tent.userData.reachTimer += dt
-      } else {
-        tent.userData.reachTimer = 0
+      // Update cooldowns
+      if (tent.userData.smashCooldown > 0) {
+        tent.userData.smashCooldown -= dt
       }
       
-      tent.rotation.x = waveAngle
+      // Handle smash state
+      if (tent.userData.smashing) {
+        tent.userData.smashDuration += dt
+        
+        // Smash down animation (first 0.3s)
+        if (tent.userData.smashDuration < 0.3) {
+          const smashProgress = tent.userData.smashDuration / 0.3
+          tent.rotation.x = Math.PI / 2 - smashProgress * 2.5 // Smash down
+          tent.position.y = 12 - smashProgress * 10 // Move down
+        } 
+        // Hold (0.3s - 0.8s)
+        else if (tent.userData.smashDuration < 0.8) {
+          tent.rotation.x = Math.PI / 2 - 2.5
+          tent.position.y = 2
+        }
+        // Reset (0.8s - 1.3s)
+        else if (tent.userData.smashDuration < 1.3) {
+          const resetProgress = (tent.userData.smashDuration - 0.8) / 0.5
+          tent.rotation.x = (Math.PI / 2 - 2.5) + resetProgress * 2.8
+          tent.position.y = 2 + resetProgress * 10
+        }
+        // Done smashing
+        else {
+          tent.userData.smashing = false
+          tent.userData.smashCooldown = 3 + Math.random() * 2 // 3-5 second cooldown
+          tent.rotation.x = Math.PI / 2 - 0.3
+          tent.position.y = 12
+        }
+      }
+      // Idle wave motion when not smashing
+      else {
+        // Wave gently
+        const waveAmount = Math.sin(time * tent.userData.speed + tent.userData.phase) * 0.2
+        tent.rotation.x = Math.PI / 2 - 0.3 + waveAmount
+        
+        // Check if should trigger smash attack
+        // Player must be close (within 25 units) and in front of this tentacle
+        if (dist < 25 && !anySmashing && tent.userData.smashCooldown <= 0) {
+          const angleToPlayer = Math.atan2(dx, dz)
+          let angleDiff = angleToPlayer - tent.userData.angle
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2
+          
+          // If player is in front of this tentacle (±45°)
+          if (Math.abs(angleDiff) < 0.8) {
+            tent.userData.smashing = true
+            tent.userData.smashDuration = 0
+          }
+        }
+      }
       
       // Update position based on kraken movement
-      tent.position.x = kraken.value.x + Math.cos(tentBaseAngle) * 8
-      tent.position.z = kraken.value.z + Math.sin(tentBaseAngle) * 8
+      tent.position.x = kraken.value.x + Math.cos(tent.userData.angle) * 6
+      tent.position.z = kraken.value.z + Math.sin(tent.userData.angle) * 6
     })
     
     // Update whirlpool rotation
@@ -1987,6 +2027,23 @@ function update(dt) {
       hp.value -= 20 * dt
       showMessage('💀 KRAKEN SMASH!')
     }
+    
+    // Check tentacle smash hits
+    kraken.value.tentacles.forEach((tent) => {
+      if (tent.userData.smashing && tent.userData.smashDuration > 0.2 && tent.userData.smashDuration < 1.0) {
+        // Tentacle is in smash phase, check distance to player
+        const tentX = kraken.value.x + Math.cos(tent.userData.angle) * 5
+        const tentZ = kraken.value.z + Math.sin(tent.userData.angle) * 5
+        const dxT = playerPos.value.x - tentX
+        const dzT = playerPos.value.z - tentZ
+        const distT = Math.sqrt(dxT * dxT + dzT * dzT)
+        
+        if (distT < 10) {
+          hp.value -= 30 * dt
+          showMessage('💀 TENTACLE SMASH!')
+        }
+      }
+    })
   }
   
   // Update cannonballs
