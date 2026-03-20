@@ -1665,6 +1665,13 @@ const spawnedChunks = new Set() // Track spawned areas "x,z"
 const worldObjects = { islands: [], rocks: [], ships: [] }
 const CHUNK_SIZE = 200 // Each chunk is 200x200 units
 
+// Performance: Distance tiers (see PERFORMANCE.md)
+const ICON_RENDER_DIST = 200
+const INACTIVE_DIST = 300
+const ACTIVE_DIST = 400
+const KRAKEN_INACTIVE_DIST = 300
+const KRAKEN_RENDER_DIST = 300
+
 function createWindParticles() {
   for (let i = 0; i < maxWindParticles; i++) {
     // Each wind particle is a line (trail)
@@ -1997,7 +2004,21 @@ function update(dt) {
     // Calculate direction to player
     const dx = playerPos.value.x - enemy.x
     const dz = playerPos.value.z - enemy.z
-    const distToPlayer = Math.sqrt(dx * dx + dz * dz)
+    const distToPlayerSq = dx * dx + dz * dz
+    const distToPlayer = Math.sqrt(distToPlayerSq)
+    
+    // Performance: Skip AI for distant enemies
+    if (distToPlayer > ACTIVE_DIST) {
+      // Just render stationary placeholder - no AI, no physics
+      mesh.visible = distToPlayer <= ACTIVE_DIST + 100 // Fade out
+      mesh.position.x = enemy.x
+      mesh.position.z = enemy.z
+      mesh.rotation.y = enemy.angle
+      return
+    }
+    
+    // Within active range - full AI
+    mesh.visible = true
     let targetAngle = Math.atan2(dx, dz)
     
     // Different behavior based on ship type
@@ -2443,8 +2464,15 @@ function update(dt) {
       krakenMesh.userData.whirlpool.material.opacity = whirlpoolOpacity
     }
     
-    krakenMesh.position.x = kraken.value.x
-    krakenMesh.position.z = kraken.value.z
+    // Performance: Only render kraken mesh within KRAKEN_RENDER_DIST
+    const krakenDistToPlayerSq = (kraken.value.x - playerPos.value.x) ** 2 + (kraken.value.z - playerPos.value.z) ** 2
+    const krakenVisible = krakenDistToPlayerSq < KRAKEN_RENDER_DIST * KRAKEN_RENDER_DIST
+    krakenMesh.visible = krakenVisible
+    
+    if (krakenVisible) {
+      krakenMesh.position.x = kraken.value.x
+      krakenMesh.position.z = kraken.value.z
+    }
     
     // Body collision
     if (dist < 15) {
@@ -2483,7 +2511,6 @@ function update(dt) {
 
 function updateEnemyIndicators() {
   const indicators = []
-  const detectionRange = 400 // Range to show indicators
   
   // Check enemy ships
   enemyShips.value.forEach(enemy => {
@@ -2491,7 +2518,8 @@ function updateEnemyIndicators() {
     const dz = enemy.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (dist < detectionRange && dist > 50) {
+    // Performance: Only show icons within ICON_RENDER_DIST
+    if (dist < ICON_RENDER_DIST && dist > 50) {
       // Calculate angle to enemy
       const angleToEnemy = Math.atan2(dx, dz) - playerAngle
       
