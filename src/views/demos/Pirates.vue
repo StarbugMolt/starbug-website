@@ -721,125 +721,82 @@ function spawnEnemyShip() {
 function createEnemyShipMesh(shipType) {
   const mesh = new THREE.Group()
   const size = shipType.size
-  const woodMat = new THREE.MeshPhongMaterial({ color: 0x4A3728 })
+  const woodMat = new THREE.MeshPhongMaterial({ color: 0x654321 })
+  const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide })
   
-  // === IMPROVED HULL ===
-  const hullGeom = new THREE.BoxGeometry(3.2 * size, 2 * size, 10 * size)
+  // === HULL ===
+  const hullGeom = new THREE.BoxGeometry(3 * size, 2 * size, 8 * size)
   const hullMat = new THREE.MeshPhongMaterial({ color: shipType.color })
   const hull = new THREE.Mesh(hullGeom, hullMat)
   hull.position.y = 1 * size
   mesh.add(hull)
   
   // Deck
-  const deckGeom = new THREE.BoxGeometry(2.8 * size, 0.2 * size, 9 * size)
+  const deckGeom = new THREE.BoxGeometry(2.5 * size, 0.2 * size, 7 * size)
   const deckMat = new THREE.MeshPhongMaterial({ color: 0xDEB887 })
   const deck = new THREE.Mesh(deckGeom, deckMat)
-  deck.position.y = 2.1 * size
+  deck.position.y = 2 * size
   mesh.add(deck)
   
-  // === MASTS WITH YARDS ===
-  // Main mast
-  const mainMastGeom = new THREE.CylinderGeometry(0.2 * size, 0.25 * size, 11 * size, 8)
-  const mainMast = new THREE.Mesh(mainMastGeom, woodMat)
-  mainMast.position.y = 7 * size
+  // Main mast - centered at z=0
+  const mainMast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.2 * size, 0.25 * size, 10 * size, 8),
+    woodMat
+  )
+  mainMast.position.set(0, 6 * size, 0)
   mesh.add(mainMast)
   
-  // Main yard
-  const yardGeom = new THREE.CylinderGeometry(0.06 * size, 0.06 * size, 6 * size, 8)
-  const yard1 = new THREE.Mesh(yardGeom, woodMat)
-  yard1.rotation.z = Math.PI / 2
-  yard1.position.set(0, 11 * size, 0)
-  mesh.add(yard1)
+  // Main sail - ROTATED 90 degrees so it faces sideways (perpendicular to ship)
+  // This is how real square rig ships work - sails extend out from the yards
+  const mainSail = new THREE.Mesh(
+    new THREE.PlaneGeometry(5 * size, 5 * size),
+    sailMat
+  )
+  mainSail.position.set(0, 8 * size, 0)
+  mainSail.rotation.y = Math.PI / 2 // Rotate to face sideways
+  mesh.add(mainSail)
   
-  // Second yard lower
-  const yard2 = new THREE.Mesh(yardGeom, woodMat)
-  yard2.rotation.z = Math.PI / 2
-  yard2.position.set(0, 8 * size, 0)
-  mesh.add(yard2)
-  
-  // Fore mast
-  const foreMastGeom = new THREE.CylinderGeometry(0.15 * size, 0.18 * size, 7 * size, 8)
-  const foreMast = new THREE.Mesh(foreMastGeom, woodMat)
-  foreMast.position.set(0, 5 * size, -2.5 * size)
+  // Fore mast - at front of ship
+  const foreMast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.15 * size, 0.18 * size, 6 * size, 8),
+    woodMat
+  )
+  foreMast.position.set(0, 4 * size, -3 * size)
   mesh.add(foreMast)
   
-  // Fore yard
-  const foreYardGeom = new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 4 * size, 8)
-  const foreYard = new THREE.Mesh(foreYardGeom, woodMat)
-  foreYard.rotation.z = Math.PI / 2
-  foreYard.position.set(0, 7.5 * size, -2.5 * size)
-  mesh.add(foreYard)
-  
-  // === SAILS WITH YARD ATTACHMENT ===
-  // Sails face FORWARD (along ship's length), not sideways
-  // Main sail - proper square rig
-  const sailGeom = new THREE.PlaneGeometry(5.5 * size, 6 * size, 10, 12)
-  const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
-  const sail = new THREE.Mesh(sailGeom, sailMat)
-  sail.position.set(0, 9.5 * size, 1 * size) // Forward (in front of mast)
-  // No rotation - sail faces forward along Z axis
-  sail.userData.isSail = true
-  sail.userData.originalVertices = sailGeom.attributes.position.array.slice()
-  sail.userData.fixedEdges = []
-  for (let i = 0; i < sailGeom.attributes.position.count; i++) {
-    const y = sailGeom.attributes.position.getY(i)
-    sail.userData.fixedEdges.push(Math.abs(y - 3 * size) < 0.1 || Math.abs(y + 3 * size) < 0.1)
-  }
-  mesh.add(sail)
-  
-  // Lower sail
-  const sail2Geom = new THREE.PlaneGeometry(4 * size, 4 * size, 8, 8)
-  const sail2 = new THREE.Mesh(sail2Geom, sailMat)
-  sail2.position.set(0, 6 * size, 1 * size)
-  // No rotation - faces forward
-  sail2.userData.isSail = true
-  sail2.userData.originalVertices = sail2Geom.attributes.position.array.slice()
-  sail2.userData.fixedEdges = []
-  for (let i = 0; i < sail2Geom.attributes.position.count; i++) {
-    const y = sail2Geom.attributes.position.getY(i)
-    sail2.userData.fixedEdges.push(Math.abs(y - 2 * size) < 0.1 || Math.abs(y + 2 * size) < 0.1)
-  }
-  mesh.add(sail2)
-  
-  // Fore sail - faces forward
-  const foreSailGeom = new THREE.PlaneGeometry(3.5 * size, 3.5 * size, 8, 8)
-  const foreSail = new THREE.Mesh(foreSailGeom, sailMat)
-  foreSail.position.set(0, 7 * size, -1 * size)
-  // No rotation - faces forward
-  foreSail.userData.isSail = true
-  foreSail.userData.originalVertices = foreSailGeom.attributes.position.array.slice()
-  foreSail.userData.fixedEdges = []
-  for (let i = 0; i < foreSailGeom.attributes.position.count; i++) {
-    const y = foreSailGeom.attributes.position.getY(i)
-    foreSail.userData.fixedEdges.push(Math.abs(y - 1.75 * size) < 0.1 || Math.abs(y + 1.75 * size) < 0.1)
-  }
+  // Fore sail - also sideways
+  const foreSail = new THREE.Mesh(
+    new THREE.PlaneGeometry(3 * size, 3 * size),
+    sailMat
+  )
+  foreSail.position.set(0, 5 * size, -3 * size)
+  foreSail.rotation.y = Math.PI / 2
   mesh.add(foreSail)
   
-  mesh.userData.sails = [sail, sail2, foreSail]
-  
-  // Flag - faces forward
-  const flagGeom = new THREE.PlaneGeometry(1.5 * size, 1 * size)
-  let flagColor = 0x0000ff
-  if (shipType === SHIP_TYPES.RAMMER) flagColor = 0xff0000
-  else if (shipType === SHIP_TYPES.BIG) flagColor = 0xffff00
-  const flagMat = new THREE.MeshBasicMaterial({ color: flagColor })
-  const flag = new THREE.Mesh(flagGeom, flagMat)
-  flag.position.set(0, 13 * size, -0.5 * size)
-  // No rotation - faces forward
+  // Flag at top of main mast
+  const flag = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.2 * size, 0.8 * size),
+    new THREE.MeshBasicMaterial({ 
+      color: shipType === SHIP_TYPES.RAMMER ? 0xff0000 : (shipType === SHIP_TYPES.BIG ? 0xffff00 : 0x0000ff) 
+    })
+  )
+  flag.position.set(0, 11 * size, 0)
+  flag.rotation.y = Math.PI / 2
   mesh.add(flag)
   
   // Rammer spike
   if (shipType === SHIP_TYPES.RAMMER) {
-    const spikeGeom = new THREE.ConeGeometry(0.35 * size, 4 * size, 6)
-    const spikeMat = new THREE.MeshPhongMaterial({ color: 0x666666, metalness: 0.9 })
-    const spike = new THREE.Mesh(spikeGeom, spikeMat)
+    const spike = new THREE.Mesh(
+      new THREE.ConeGeometry(0.3 * size, 3 * size, 6),
+      new THREE.MeshPhongMaterial({ color: 0x888888, metalness: 0.8 })
+    )
     spike.rotation.x = -Math.PI / 2
-    spike.position.set(0, 1 * size, 6.5 * size)
+    spike.position.set(0, 1 * size, 5 * size)
     mesh.add(spike)
   }
   
-  // Store reference for health bar
-  mesh.userData.shipType = shipType
+  // No sails to animate for enemies (simpler)
+  mesh.userData.sails = []
   
   return mesh
 }
