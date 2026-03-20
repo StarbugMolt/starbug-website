@@ -454,7 +454,7 @@ function createPlayerShip() {
   fin2.position.set(0, 1.4, 0)
   windArrowGroup.add(fin2)
   
-  windArrowGroup.position.set(0, 13, 0)
+  windArrowGroup.position.set(0, 14.5, 0) // Higher to be visible above crow's nest
   playerShip.add(windArrowGroup)
   playerShip.userData.windArrow = windArrowGroup
 
@@ -1045,8 +1045,8 @@ function onMouseMove(e) {
   // Always accumulate mouse movement when game is playing
   // This works because pointer lock captures all mouse movement
   if (gameState.value === 'playing') {
-    // Very low sensitivity for big ship feel
-    const turnInput = e.movementX * 0.0003
+    // Very low sensitivity for big ship feel (inverted: right turns right)
+    const turnInput = -e.movementX * 0.0003
     
     // Clamp the accumulated turn to maintain sluggish feel
     // Can't push past this limit no matter how far you move mouse
@@ -1354,11 +1354,11 @@ function update(dt) {
   
   // Camera follow - interpolate between behind view and top-down based on cameraMode
   // Behind view (navigation): close behind, lower angle
-  const behindDist = 35
-  const behindHeight = 20
+  const behindDist = 50
+  const behindHeight = 35
   // Top-down view (combat): high above, looking down
-  const topDownDist = 60
-  const topDownHeight = 80
+  const topDownDist = 80
+  const topDownHeight = 100
   
   // Interpolate based on cameraMode
   let dist = behindDist + (topDownDist - behindDist) * cameraMode
@@ -1682,13 +1682,13 @@ function updateEnemyIndicators() {
       const angleToEnemy = Math.atan2(dx, dz) - playerAngle
       
       // Convert to screen position (simple approximation)
-      const screenX = 50 + Math.sin(angleToEnemy) * 40
+      const screenX = 50 - Math.sin(angleToEnemy) * 40
       const screenY = 50 - Math.cos(angleToEnemy) * 30
       
       indicators.push({
         x: Math.max(10, Math.min(90, screenX)),
         y: Math.max(10, Math.min(90, screenY)),
-        angle: -angleToEnemy,
+        angle: angleToEnemy,
         icon: enemy.type === 'RAMMER' ? '⚔️' : (enemy.type === 'BIG' ? '🏴‍☠️' : '⛵'),
         label: `${enemy.type} (${Math.round(dist)}m)`
       })
@@ -1703,7 +1703,7 @@ function updateEnemyIndicators() {
     
     if (dist < detectionRange) {
       const angleToKraken = Math.atan2(dx, dz) - playerAngle
-      const screenX = 50 + Math.sin(angleToKraken) * 40
+      const screenX = 50 - Math.sin(angleToKraken) * 40
       const screenY = 50 - Math.cos(angleToKraken) * 30
       
       indicators.push({
