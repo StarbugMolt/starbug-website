@@ -2001,12 +2001,8 @@ function update(dt) {
     }
   }
   
-  // Check if all enemies destroyed (exclude sinking)
-  const activeEnemies = enemyShips.value.filter(e => e.hp > 0 && !e.sinking)
-  if (activeEnemies.length === 0 && enemyShips.value.some(e => e.sinking)) {
-    // All enemies destroyed!
-    enemyShipMeshes.forEach(mesh => scene.remove(mesh))
-    enemyShipMeshes = []
+  // Check if all enemies are gone (including sinking)
+  if (enemyShips.value.length === 0 && enemyShipMeshes.length === 0 && !krakenActive) {
     gold.value += 200
     showMessage('💰 All enemies destroyed! +200 Gold')
     
