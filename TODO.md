@@ -14,12 +14,14 @@
 - [x] Sinking animations
 
 ## In Progress / Next
-- [ ] Infinite world (remove borders, procedural generation)
-- [ ] Harbor graphics on islands
 - [ ] Enemy AI with raycasting for line-of-sight firing
-- [ ] More enemy ship types/groups
 - [ ] Visual improvements for waves
 - [ ] Player ship damage visuals
+
+## Completed (just added)
+- [x] Infinite world (9x9 procedural grid)
+- [x] Harbor graphics on islands (30% of islands)
+- [x] Random ships per chunk (0-3 per chunk)
 
 ## Ideas / Backlog
 - [ ] Multiple treasure chests
