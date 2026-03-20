@@ -972,7 +972,8 @@ function fireCannon(side) {
     for (let i = 0; i < sidePositions.length; i++) {
       const zOffset = sidePositions[i]
       // Calculate cone angle: front cannon fires forward, back fires backward
-      const coneAngle = (i - 1) * (10 * Math.PI / 180) // -10°, 0°, +10°
+      // Inverted: front (i=0) = +10°, back (i=2) = -10°
+      const coneAngle = (1 - i) * (10 * Math.PI / 180) // +10°, 0°, -10°
       
       const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
       const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
