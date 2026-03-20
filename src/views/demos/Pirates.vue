@@ -1274,10 +1274,14 @@ function createWindParticles() {
       color: 0xffffff,
       transparent: true,
       opacity: 0.15,
-      blending: THREE.AdditiveBlending
+      blending: THREE.AdditiveBlending,
+      depthTest: false, // Always render
+      depthWrite: false,
+      renderOrder: 999 // Render on top
     })
     
     const particle = new THREE.Line(geometry, material)
+    particle.frustumCulled = false // Never cull
     initWindParticle(particle)
     scene.add(particle)
     windParticles.push(particle)
