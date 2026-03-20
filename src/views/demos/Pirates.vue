@@ -106,7 +106,9 @@ let cameraMode = 0 // Start in behind view
 
 // Wind
 let windAngle = 0
+let targetWindAngle = 0 // For smooth wind transitions
 const windSpeed = ref(3)
+let targetWindSpeed = 3 // For smooth wind speed transitions
 let windChangeTimer = 0
 
 // Projectiles
@@ -1271,7 +1273,7 @@ function createWindParticles() {
     const material = new THREE.LineBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.15,
       blending: THREE.AdditiveBlending
     })
     
@@ -1339,7 +1341,7 @@ function updateWindParticles(dt) {
     
     // Fade based on life
     const lifeRatio = particle.userData.life / particle.userData.maxLife
-    particle.material.opacity = 0.25 * (1 - lifeRatio) * (windSpeed.value / 5)
+    particle.material.opacity = 0.08 * (1 - lifeRatio) * (windSpeed.value / 5)
     
     // Reset if too old or too far from player
     const dx = particle.userData.x - playerPos.value.x
@@ -1381,12 +1383,24 @@ function update(dt) {
   // Update wind - more dynamic changes
   windChangeTimer -= dt
   if (windChangeTimer <= 0) {
+    // Set new target wind values
     // Wind can change by 45-180 degrees each shift
     const shiftAmount = (Math.random() * 2 + 0.5) * (Math.random() > 0.5 ? 1 : -1)
-    windAngle += shiftAmount
-    windSpeed.value = 2 + Math.random() * 5 // More variation in speed
+    targetWindAngle = windAngle + shiftAmount
+    targetWindSpeed = 2 + Math.random() * 5
     windChangeTimer = 12 + Math.random() * 5 // Changes every 12-17 seconds
-    showMessage(`💨 Wind: ${getWindDirection()} at ${windSpeed.value.toFixed(1)} kn`, 2000)
+    showMessage(`💨 Wind shifting...`, 2000)
+  }
+  
+  // Gradually transition wind angle (4 second transition)
+  const windTransitionSpeed = 0.25 // Complete transition in ~4 seconds
+  if (Math.abs(targetWindAngle - windAngle) > 0.01) {
+    windAngle += (targetWindAngle - windAngle) * windTransitionSpeed * dt
+  }
+  
+  // Gradually transition wind speed
+  if (Math.abs(targetWindSpeed - windSpeed.value) > 0.1) {
+    windSpeed.value += (targetWindSpeed - windSpeed.value) * windTransitionSpeed * dt
   }
   
   // Animate sails
