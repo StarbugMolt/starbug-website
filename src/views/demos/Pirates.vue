@@ -1177,6 +1177,61 @@ function spawnChunk(cx, cz) {
       }
     }
   }
+  
+  // 15% chance for sunken ship with treasure
+  if (!isStartingChunk && Math.random() < 0.15) {
+    let sx, sz, validPos
+    let attempts = 0
+    
+    do {
+      validPos = true
+      const angle = Math.random() * Math.PI * 2
+      const maxDist = (CHUNK_SIZE / 2) - 40
+      const dist = 30 + Math.random() * maxDist
+      sx = worldX + Math.cos(angle) * dist
+      sz = worldZ + Math.sin(angle) * dist
+      
+      // Check islands
+      for (const island of worldObjects.islands) {
+        const dx = sx - island.x
+        const dz = sz - island.z
+        if (Math.sqrt(dx * dx + dz * dz) < island.radius + 25) {
+          validPos = false
+          break
+        }
+      }
+      
+      // Check rocks
+      if (validPos) {
+        for (const rock of worldObjects.rocks) {
+          const dx = sx - rock.x
+          const dz = sz - rock.z
+          if (Math.sqrt(dx * dx + dz * dz) < rock.radius + 10) {
+            validPos = false
+            break
+          }
+        }
+      }
+      
+      // Check other ships
+      if (validPos) {
+        for (const ship of chunkShips) {
+          const dx = sx - ship.x
+          const dz = sz - ship.z
+          if (Math.sqrt(dx * dx + dz * dz) < 30) {
+            validPos = false
+            break
+          }
+        }
+      }
+      
+      attempts++
+    } while (!validPos && attempts < 10)
+    
+    if (validPos) {
+      spawnSunkenShip(sx, sz)
+    }
+  }
 }
 
 function spawnIsland(x, z) {
@@ -1226,6 +1281,38 @@ function spawnIsland(x, z) {
   islandGroup.position.set(x, 0, z)
   scene.add(islandGroup)
   worldObjects.islands.push({ x, z, radius: 20, mesh: islandGroup })
+}
+
+function spawnSunkenShip(x, z) {
+  // Half-sunk shipwreck - brownish hull tilted
+  const shipwreckGroup = new THREE.Group()
+  
+  // Hull (tilted as if sunk)
+  const hullGeom = new THREE.BoxGeometry(3, 1.5, 8)
+  const hullMat = new THREE.MeshPhongMaterial({ color: 0x4a3728 }) // Dark brown
+  const hull = new THREE.Mesh(hullGeom, hullMat)
+  hull.position.y = -0.3
+  hull.rotation.x = 0.3 // Tilt back
+  hull.rotation.z = (Math.random() - 0.5) * 0.2
+  shipwreckGroup.add(hull)
+  
+  // Mast sticking out
+  const mastGeom = new THREE.CylinderGeometry(0.15, 0.2, 6)
+  const mastMat = new THREE.MeshPhongMaterial({ color: 0x3d2817 })
+  const mast = new THREE.Mesh(mastGeom, mastMat)
+  mast.position.set(0, 2, 1)
+  mast.rotation.x = -0.4
+  shipwreckGroup.add(mast)
+  
+  shipwreckGroup.position.set(x, 0, z)
+  scene.add(shipwreckGroup)
+  
+  // Spawn treasure at the wreck location
+  spawnTreasure(x, z)
+  
+  // Track for cleanup
+  worldObjects.ships = worldObjects.ships || []
+  worldObjects.ships.push({ x, z, radius: 5, mesh: shipwreckGroup })
 }
 
 function spawnRock(x, z) {
