@@ -1031,11 +1031,44 @@ function checkProceduralSpawns() {
         }
       }
       
-      // Respawn kraken
-      const worldX = newCX * CHUNK_SIZE + CHUNK_SIZE / 2
-      const worldZ = newCZ * CHUNK_SIZE + CHUNK_SIZE / 2
-      kraken.value.x = worldX + (Math.random() - 0.5) * 100
-      kraken.value.z = worldZ + (Math.random() - 0.5) * 100
+      // Respawn kraken (find valid position not on islands/rocks)
+      let kx, kz, validK
+      let kAttempts = 0
+      
+      do {
+        validK = true
+        const worldX = newCX * CHUNK_SIZE + CHUNK_SIZE / 2
+        const worldZ = newCZ * CHUNK_SIZE + CHUNK_SIZE / 2
+        kx = worldX + (Math.random() - 0.5) * 100
+        kz = worldZ + (Math.random() - 0.5) * 100
+        
+        // Check islands
+        for (const island of worldObjects.islands) {
+          const dx = kx - island.x
+          const dz = kz - island.z
+          if (Math.sqrt(dx * dx + dz * dz) < island.radius + 30) {
+            validK = false
+            break
+          }
+        }
+        
+        // Check rocks
+        if (validK) {
+          for (const rock of worldObjects.rocks) {
+            const dx = kx - rock.x
+            const dz = kz - rock.z
+            if (Math.sqrt(dx * dx + dz * dz) < rock.radius + 15) {
+              validK = false
+              break
+            }
+          }
+        }
+        
+        kAttempts++
+      } while (!validK && kAttempts < 10)
+      
+      kraken.value.x = kx
+      kraken.value.z = kz
       if (krakenMesh) {
         scene.remove(krakenMesh)
         krakenMesh = null
