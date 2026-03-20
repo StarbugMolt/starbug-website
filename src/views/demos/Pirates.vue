@@ -876,42 +876,63 @@ function createKraken() {
   
   krakenMesh = new THREE.Group()
   
-  // Body
-  const bodyGeometry = new THREE.SphereGeometry(8, 16, 16)
-  const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x2F4F4F })
+  // Bigger, more impressive body
+  const bodyGeometry = new THREE.SphereGeometry(12, 20, 20)
+  const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x1a3030 })
   const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
-  body.scale.y = 0.5
-  body.position.y = 2
+  body.scale.y = 0.6
+  body.position.y = 3
   krakenMesh.add(body)
   
-  // Eyes
-  const eyeGeometry = new THREE.SphereGeometry(1.5, 8, 8)
-  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 })
+  // Glowing eyes
+  const eyeGeometry = new THREE.SphereGeometry(2, 12, 12)
+  const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff3333 })
   const eyeL = new THREE.Mesh(eyeGeometry, eyeMaterial)
-  eyeL.position.set(-3, 3, 5)
+  eyeL.position.set(-4, 5, 8)
   krakenMesh.add(eyeL)
   const eyeR = new THREE.Mesh(eyeGeometry, eyeMaterial)
-  eyeR.position.set(3, 3, 5)
+  eyeR.position.set(4, 5, 8)
   krakenMesh.add(eyeR)
   
-  // Tentacles
+  // Longer, animated tentacles
   kraken.value.tentacles = []
-  for (let i = 0; i < 8; i++) {
-    const tentGeometry = new THREE.CylinderGeometry(0.5, 1.5, 15, 8)
-    const tentMaterial = new THREE.MeshPhongMaterial({ color: 0x2F4F4F })
-    const tent = new THREE.Mesh(tentGeometry, tentMaterial)
-    const angle = (i / 8) * Math.PI * 2
-    tent.position.set(Math.cos(angle) * 5, 0, Math.sin(angle) * 5)
-    tent.rotation.x = Math.PI / 4
-    tent.rotation.z = Math.cos(angle) * 0.5
+  for (let i = 0; i < 10; i++) {
+    const tentGeom = new THREE.CylinderGeometry(0.4, 1.8, 30, 8)
+    const tentMat = new THREE.MeshPhongMaterial({ color: 0x1a3030 })
+    const tent = new THREE.Mesh(tentGeom, tentMat)
+    
+    const angle = (i / 10) * Math.PI * 2
+    tent.userData.baseAngle = angle
+    tent.userData.baseX = Math.cos(angle) * 8
+    tent.userData.baseZ = Math.sin(angle) * 8
+    tent.userData.phase = Math.random() * Math.PI * 2
+    tent.userData.speed = 1 + Math.random() * 0.5
+    tent.userData.reachingForPlayer = false
+    tent.userData.reachTimer = 0
+    
+    tent.position.set(tent.userData.baseX, 5, tent.userData.baseZ)
     krakenMesh.add(tent)
     kraken.value.tentacles.push(tent)
   }
   
+  // Whirlpool effect (particle ring around kraken)
+  const whirlpoolGeom = new THREE.RingGeometry(15, 25, 32)
+  const whirlpoolMat = new THREE.MeshBasicMaterial({ 
+    color: 0x4488ff, 
+    transparent: true, 
+    opacity: 0.3,
+    side: THREE.DoubleSide 
+  })
+  const whirlpool = new THREE.Mesh(whirlpoolGeom, whirlpoolMat)
+  whirlpool.rotation.x = -Math.PI / 2
+  whirlpool.position.y = 0.5
+  krakenMesh.add(whirlpool)
+  krakenMesh.userData.whirlpool = whirlpool
+  
   krakenMesh.position.set(0, 0, 0)
   scene.add(krakenMesh)
   krakenActive = true
-  kraken.value.hp = 150
+  kraken.value.hp = 200
   
   showMessage('💀 THE KRAKEN AWAKENS!', 5000)
 }
@@ -1790,29 +1811,76 @@ function update(dt) {
   
   // Kraken AI
   if (krakenActive && kraken.value.hp > 0) {
-    // Move toward player
+    // Move toward player slowly
     const dx = playerPos.value.x - kraken.value.x
     const dz = playerPos.value.z - kraken.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (dist > 20) {
-      kraken.value.x += (dx / dist) * 5 * dt
-      kraken.value.z += (dz / dist) * 5 * dt
+    if (dist > 25) {
+      kraken.value.x += (dx / dist) * 3 * dt
+      kraken.value.z += (dz / dist) * 3 * dt
     }
     
-    // Tentacle animation
+    // === WHIRLPOOL - Pull player if too close ===
+    if (dist < 60) {
+      // Stronger pull when closer
+      const pullStrength = (1 - dist / 60) * 2 // Max pull speed of 2
+      playerPos.value.x += (kraken.value.x - playerPos.value.x) / dist * pullStrength * dt
+      playerPos.value.z += (kraken.value.z - playerPos.value.z) / dist * pullStrength * dt
+      
+      // Slow player movement in whirlpool
+      playerSpeed.value *= 0.95
+    }
+    
+    // === ANIMATED TENTACLES - Reach for player ===
     const time = Date.now() * 0.001
+    
     kraken.value.tentacles.forEach((tent, i) => {
-      tent.rotation.x = Math.PI / 4 + Math.sin(time * 2 + i) * 0.3
+      // Base waving motion
+      let waveAngle = Math.PI / 4 + Math.sin(time * tent.userData.speed + tent.userData.phase) * 0.4
+      
+      // If player is close, tentacles reach for them
+      const angleToPlayer = Math.atan2(dx, dz)
+      const tentBaseAngle = tent.userData.baseAngle
+      
+      // Check if this tentacle is facing player
+      let angleDiff = angleToPlayer - tentBaseAngle
+      // Normalize angle
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2
+      
+      // If player is in front of this tentacle, reach for them
+      if (dist < 40 && Math.abs(angleDiff) < 0.8) {
+        // Reach forward toward player
+        const reachAmount = (1 - dist / 40) * 1.2
+        waveAngle -= reachAmount // Point more toward player
+        tent.userData.reachTimer += dt
+      } else {
+        tent.userData.reachTimer = 0
+      }
+      
+      tent.rotation.x = waveAngle
+      
+      // Update position based on kraken movement
+      tent.position.x = kraken.value.x + Math.cos(tentBaseAngle) * 8
+      tent.position.z = kraken.value.z + Math.sin(tentBaseAngle) * 8
     })
+    
+    // Update whirlpool rotation
+    if (krakenMesh.userData.whirlpool) {
+      krakenMesh.userData.whirlpool.rotation.z += dt * 0.5
+      // Whirlpool opacity based on distance
+      const whirlpoolOpacity = dist < 60 ? 0.3 + (1 - dist / 60) * 0.4 : 0.15
+      krakenMesh.userData.whirlpool.material.opacity = whirlpoolOpacity
+    }
     
     krakenMesh.position.x = kraken.value.x
     krakenMesh.position.z = kraken.value.z
     
-    // Collision with player
-    if (dist < 12) {
-      hp.value -= 15 * dt
-      showMessage('💀 Kraken attacking!')
+    // Collision with player (tentacle smash)
+    if (dist < 15) {
+      hp.value -= 20 * dt
+      showMessage('💀 KRAKEN SMASH!')
     }
   }
   
