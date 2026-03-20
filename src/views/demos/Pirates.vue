@@ -2264,7 +2264,7 @@ function update(dt) {
       return
     }
     // Performance: Skip AI for distant enemies
-    if (Math.sqrt(distToPlayerSq) > ACTIVE_DIST) {
+    if (distToPlayer > ACTIVE_DIST) {
       // Just render stationary placeholder - no AI, no physics
       mesh.visible = distToPlayer <= ACTIVE_DIST + 100 // Fade out
       mesh.position.x = enemy.x
