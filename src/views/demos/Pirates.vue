@@ -1047,6 +1047,10 @@ function updateTreasure(dt) {
     treasure.value = null
   }
   
+  // Update mesh positions (world coordinates)
+  t.mesh.position.set(t.x, 1, t.z)
+  t.ringMesh.position.set(t.x, 0.3, t.z)
+  
   // Update ring pulsing
   const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.2
   t.ringMesh.material.opacity = t.collecting ? 0.8 : pulse
@@ -2016,14 +2020,29 @@ function update(dt) {
   
   // Kraken AI
   if (krakenActive && kraken.value.hp > 0) {
-    // Move toward player slowly
     const dx = playerPos.value.x - kraken.value.x
     const dz = playerPos.value.z - kraken.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (dist > 25) {
-      kraken.value.x += (dx / dist) * 3 * dt
-      kraken.value.z += (dz / dist) * 3 * dt
+    // Kraken states: idle (random movement), aggressive (chase player)
+    if (dist > 70) {
+      // Idle - move randomly
+      if (!kraken.value.idleTarget || Math.random() < 0.01) {
+        kraken.value.idleAngle = Math.random() * Math.PI * 2
+        kraken.value.idleSpeed = 1 + Math.random() * 1
+      }
+      kraken.value.x += Math.sin(kraken.value.idleAngle) * kraken.value.idleSpeed * dt
+      kraken.value.z += Math.cos(kraken.value.idleAngle) * kraken.value.idleSpeed * dt
+    } else if (dist > 35) {
+      // Approach - move toward player but slowly
+      kraken.value.x += (dx / dist) * 2 * dt
+      kraken.value.z += (dz / dist) * 2 * dt
+    } else {
+      // Aggressive - close to player
+      if (dist > 25) {
+        kraken.value.x += (dx / dist) * 3 * dt
+        kraken.value.z += (dz / dist) * 3 * dt
+      }
     }
     
     // === WHIRLPOOL - Pull player if too close ===
@@ -2367,12 +2386,19 @@ function startGame() {
   // Spawn new enemies
   spawnEnemyShip()
   
+  // Spawn kraken at random distant location
+  const krakenDist = 150 + Math.random() * 100
+  const krakenAngle = Math.random() * Math.PI * 2
+  const startX = Math.sin(krakenAngle) * krakenDist
+  const startZ = Math.cos(krakenAngle) * krakenDist
+  
   if (krakenMesh) {
     scene.remove(krakenMesh)
     krakenMesh = null
   }
-  krakenActive = false
-  kraken.value = { x: 0, z: 0, hp: 150, angle: 0, tentacles: [] }
+  krakenActive = true
+  kraken.value = { x: startX, z: startZ, hp: 200, angle: 0, tentacles: [] }
+  createKraken()
   
   // Clear cannonballs
   cannonballs.forEach(b => scene.remove(b.mesh))
