@@ -1273,7 +1273,7 @@ function createWindParticles() {
     const material = new THREE.LineBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.15,
+      opacity: 0.25,
       blending: THREE.AdditiveBlending,
       depthTest: false, // Always render
       depthWrite: false,
@@ -1350,7 +1350,7 @@ function updateWindParticles(dt) {
     
     // Fade
     const life = particle.userData.life / particle.userData.maxLife
-    particle.material.opacity = 0.1 * (1 - life)
+    particle.material.opacity = 0.2 * (1 - life)
     
     // Respawn if too old or too far
     const dx = particle.userData.x - playerPos.value.x
