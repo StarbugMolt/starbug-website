@@ -87,7 +87,7 @@ const hp = ref(100)
 const gold = ref(0)
 
 // Treasure system
-const treasure = ref(null) // { x, z, mesh, ringMesh, timer, collecting }
+const treasures = ref([]) // Array of treasure entities { x, z, mesh, ringMesh, timer, collecting, collected, collectFade }
 let treasureCollectTimer = 0
 const message = ref('')
 const enemyIndicators = ref([]) // For directional indicators
@@ -952,8 +952,6 @@ function createKraken() {
 
 // Treasure functions
 function spawnTreasure(x, z) {
-  if (treasure.value) return // Only one treasure at a time
-  
   // Treasure chest
   const chestGeom = new THREE.BoxGeometry(1.5, 1, 1)
   const chestMat = new THREE.MeshPhongMaterial({ color: 0xFFD700 }) // Gold
@@ -974,7 +972,8 @@ function spawnTreasure(x, z) {
   ring.position.y = 0.3
   scene.add(ring)
   
-  treasure.value = {
+  // Add as unique entity to array
+  const treasureEntity = {
     x: x,
     z: z,
     mesh: chest,
@@ -984,6 +983,8 @@ function spawnTreasure(x, z) {
     collected: false,
     collectFade: 1.0
   }
+  
+  treasures.value.push(treasureEntity)
   
   showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
 }
@@ -1398,23 +1399,80 @@ function cleanupDistantChunks() {
 }
 
 function updateTreasure(dt) {
-  if (!treasure.value) return
-  
-  const t = treasure.value
-  
-  // Handle collected state - fade out and remove
-  if (t.collected) {
-    t.collectFade -= dt * 2 // Fade out over ~0.5 seconds
-    if (t.mesh) {
-      t.mesh.scale.setScalar(t.collectFade)
-      t.mesh.position.y += dt * 2 // Float up
-    }
-    if (t.ringMesh) {
-      t.ringMesh.scale.setScalar(t.collectFade)
+  // Loop through all treasure entities (backwards for safe removal)
+  for (let i = treasures.value.length - 1; i >= 0; i--) {
+    const t = treasures.value[i]
+    
+    // Handle collected state - fade out and remove
+    if (t.collected) {
+      t.collectFade -= dt * 2 // Fade out over ~0.5 seconds
+      if (t.mesh) {
+        t.mesh.scale.setScalar(t.collectFade)
+        t.mesh.position.y += dt * 2 // Float up
+      }
+      if (t.ringMesh) {
+        t.ringMesh.scale.setScalar(t.collectFade)
+      }
+      
+      if (t.collectFade <= 0) {
+        // Fully remove
+        if (t.mesh) {
+          scene.remove(t.mesh)
+          t.mesh.geometry?.dispose()
+          t.mesh.material?.dispose()
+        }
+        if (t.ringMesh) {
+          scene.remove(t.ringMesh)
+          t.ringMesh.geometry?.dispose()
+          t.ringMesh.material?.dispose()
+        }
+        treasures.value.splice(i, 1)
+        continue
+      }
+      // Skip rest of update while fading
+      continue
     }
     
-    if (t.collectFade <= 0) {
-      // Fully remove
+    // Update timer
+    t.timer -= dt
+    
+    // Check player distance
+    const dx = playerPos.value.x - t.x
+    const dz = playerPos.value.z - t.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    
+    // Reset timer if player enters zone
+    if (dist < 10) {
+      t.timer = 60
+    }
+    
+    // Check for collection (only one at a time to prevent spam)
+    if (treasureCollectTimer <= 0 && anchorDropped && dist < 10) {
+      if (!t.collecting) {
+        t.collecting = true
+        treasureCollectTimer = 3
+        showMessage('💰 Collecting treasure...', 2000)
+      }
+      
+      treasureCollectTimer -= dt
+      if (treasureCollectTimer <= 0) {
+        // Collected!
+        const coins = Math.floor(50 + Math.random() * 50)
+        gold.value += coins
+        showMessage(`💰 +${coins} Gold!`, 3000)
+        
+        // Start fade out animation
+        t.collected = true
+        t.collectFade = 1.0
+        treasureCollectTimer = 0
+      }
+    } else if (dist >= 10) {
+      t.collecting = false
+    }
+    
+    // Expired treasure
+    if (t.timer <= 0) {
+      showMessage('💨 Treasure lost to the sea...', 2000)
       if (t.mesh) {
         scene.remove(t.mesh)
         t.mesh.geometry?.dispose()
@@ -1425,77 +1483,21 @@ function updateTreasure(dt) {
         t.ringMesh.geometry?.dispose()
         t.ringMesh.material?.dispose()
       }
-      treasure.value = null
-      treasureCollectTimer = 0
-      return
-    }
-    // Skip rest of update while fading
-    return
-  }
-  
-  // Update timer
-  t.timer -= dt
-  
-  // Check player distance
-  const dx = playerPos.value.x - t.x
-  const dz = playerPos.value.z - t.z
-  const dist = Math.sqrt(dx * dx + dz * dz)
-  
-  // Reset timer if player enters zone
-  if (dist < 10) {
-    t.timer = 60
-  }
-  
-  // Check for collection
-  if (anchorDropped && dist < 10) {
-    if (!t.collecting) {
-      t.collecting = true
-      treasureCollectTimer = 3
-      showMessage('💰 Collecting treasure...', 2000)
+      treasures.value.splice(i, 1)
+      continue
     }
     
-    treasureCollectTimer -= dt
-    if (treasureCollectTimer <= 0) {
-      // Collected!
-      const coins = Math.floor(50 + Math.random() * 50)
-      gold.value += coins
-      showMessage(`💰 +${coins} Gold!`, 3000)
-      
-      // Start fade out animation
-      t.collected = true
-      t.collectFade = 1.0
-      return
-    }
-  } else {
-    t.collecting = false
-    treasureCollectTimer = 0
-  }
-  
-  // Expired treasure
-  if (t.timer <= 0) {
-    showMessage('💨 Treasure lost to the sea...', 2000)
-    if (t.mesh) {
-      scene.remove(t.mesh)
-      t.mesh.geometry?.dispose()
-      t.mesh.material?.dispose()
-    }
+    // Update mesh positions (world coordinates)
+    if (t.mesh) t.mesh.position.set(t.x, 1, t.z)
+    if (t.ringMesh) t.ringMesh.position.set(t.x, 0.3, t.z)
+    
+    // Update ring pulsing
     if (t.ringMesh) {
-      scene.remove(t.ringMesh)
-      t.ringMesh.geometry?.dispose()
-      t.ringMesh.material?.dispose()
+      const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.2
+      t.ringMesh.material.opacity = t.collecting ? 0.8 : pulse
+      t.ringMesh.material.color.setHex(t.collecting ? 0x00FF00 : 0xFFD700)
     }
-    treasure.value = null
-    return
   }
-  
-  // Update mesh positions (world coordinates)
-  t.mesh.position.set(t.x, 1, t.z)
-  t.ringMesh.position.set(t.x, 0.3, t.z)
-  
-  // Update ring pulsing
-  const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.2
-  t.ringMesh.material.opacity = t.collecting ? 0.8 : pulse
-  t.ringMesh.material.color.setHex(t.collecting ? 0x00FF00 : 0xFFD700)
 }
 
 function fireCannon(side) {
@@ -2557,11 +2559,9 @@ function update(dt) {
   // Remove fully sunk enemies
   for (let i = enemyShips.value.length - 1; i >= 0; i--) {
     if (enemyShips.value[i].sinking && enemyShips.value[i].sinkingTime > 3) {
-      // Spawn treasure before removing
+      // Spawn treasure before removing (unique entity each time)
       const enemy = enemyShips.value[i]
-      if (!treasure.value) {
-        spawnTreasure(enemy.x, enemy.z)
-      }
+      spawnTreasure(enemy.x, enemy.z)
       
       // Remove after 3 seconds of sinking
       const mesh = enemyShipMeshes[i]
@@ -2951,12 +2951,20 @@ function startGame() {
   anchorDropped = false
   anchorAnimating = false
   
-  // Reset treasure
-  if (treasure.value) {
-    scene.remove(treasure.value.mesh)
-    scene.remove(treasure.value.ringMesh)
-    treasure.value = null
-  }
+  // Reset treasures - remove all treasure entities
+  treasures.value.forEach(t => {
+    if (t.mesh) {
+      scene.remove(t.mesh)
+      t.mesh.geometry?.dispose()
+      t.mesh.material?.dispose()
+    }
+    if (t.ringMesh) {
+      scene.remove(t.ringMesh)
+      t.ringMesh.geometry?.dispose()
+      t.ringMesh.material?.dispose()
+    }
+  })
+  treasures.value = []
   treasureCollectTimer = 0
   
   // Clear old enemy references
