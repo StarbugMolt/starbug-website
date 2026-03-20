@@ -637,61 +637,6 @@ function createPlayerShip() {
   scene.add(playerShip)
 }
 
-function createIslands() {
-  // Create 10 islands (more for bigger map)
-  for (let i = 0; i < 10; i++) {
-    const islandGroup = new THREE.Group()
-    
-    const angle = (i / 10) * Math.PI * 2
-    const dist = 200 + Math.random() * 250 // Farther out
-    const x = Math.cos(angle) * dist
-    const z = Math.sin(angle) * dist
-    
-    // Sand
-    const sandGeometry = new THREE.ConeGeometry(12 + Math.random() * 8, 6, 8)
-    const sandMaterial = new THREE.MeshPhongMaterial({ color: 0xF4A460 })
-    const sand = new THREE.Mesh(sandGeometry, sandMaterial)
-    sand.position.y = 1
-    islandGroup.add(sand)
-    
-    // Palm tree
-    const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.4, 4)
-    const trunkMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
-    const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial)
-    trunk.position.y = 4
-    islandGroup.add(trunk)
-    
-    const leavesGeometry = new THREE.ConeGeometry(2, 3, 8)
-    const leavesMaterial = new THREE.MeshPhongMaterial({ color: 0x228B22 })
-    const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial)
-    leaves.position.y = 6
-    islandGroup.add(leaves)
-    
-    islandGroup.position.set(x, 0, z)
-    islands.push({ x, z, radius: 15, mesh: islandGroup })
-    scene.add(islandGroup)
-  }
-  
-  // Create rocks - scattered throughout larger area
-  for (let i = 0; i < 30; i++) {
-    const rockGeometry = new THREE.DodecahedronGeometry(1 + Math.random() * 2)
-    const rockMaterial = new THREE.MeshPhongMaterial({ color: 0x696969 })
-    const rock = new THREE.Mesh(rockGeometry, rockMaterial)
-    
-    const angle = Math.random() * Math.PI * 2
-    const dist = 50 + Math.random() * 400
-    rock.position.set(
-      Math.cos(angle) * dist,
-      0.5,
-      Math.sin(angle) * dist
-    )
-    rock.rotation.set(Math.random(), Math.random(), Math.random())
-    
-    rocks.push({ x: rock.position.x, z: rock.position.z, radius: 2, mesh: rock })
-    scene.add(rock)
-  }
-}
-
 // Spawn enemy ships - one of each type
 function spawnEnemyShip() {
   // Clear existing enemies
