@@ -1909,13 +1909,32 @@ function update(dt) {
     
     // === WHIRLPOOL - Pull player if too close ===
     if (dist < 60) {
-      // Stronger pull when closer
-      const pullStrength = (1 - dist / 60) * 2 // Max pull speed of 2
-      playerPos.value.x += (kraken.value.x - playerPos.value.x) / dist * pullStrength * dt
-      playerPos.value.z += (kraken.value.z - playerPos.value.z) / dist * pullStrength * dt
+      // Check wind direction relative to player heading
+      // Positive = wind behind (tailwind), Negative = headwind
+      let windAlignment = Math.cos(windAngle - playerAngle)
       
-      // Slow player movement in whirlpool
-      playerSpeed.value *= 0.95
+      // If wind is behind player (±20°), reduce pull or push out
+      let pullModifier = 1.0
+      if (windAlignment > 0.94) { // Within ±20° of tailwind
+        pullModifier = -0.5 // Push OUT of whirlpool
+      }
+      
+      // Stronger pull when closer
+      const pullStrength = (1 - dist / 60) * 2 * pullModifier // Max pull speed of 2
+      if (pullStrength !== 0) {
+        playerPos.value.x += (kraken.value.x - playerPos.value.x) / dist * pullStrength * dt
+        playerPos.value.z += (kraken.value.z - playerPos.value.z) / dist * pullStrength * dt
+      }
+      
+      // Slow player movement in whirlpool - more if sailing against wind
+      let slowFactor = 0.95
+      if (windAlignment < 0.94 && windAlignment > 0) { // sailing against wind (but not completely)
+        // Extra slowdown if wind is somewhat against
+        slowFactor = 0.9
+      } else if (windAlignment < 0.17) { // sailing directly against wind (±10°)
+        slowFactor = 0.85 // Much faster slowdown
+      }
+      playerSpeed.value *= slowFactor
     }
     
     // === ANIMATED TENTACLES - Reach for player ===
