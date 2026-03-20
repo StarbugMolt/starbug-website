@@ -339,7 +339,7 @@ function createSky() {
     
     cloudGroup.position.set(
       (Math.random() - 0.5) * 300,
-      40 + Math.random() * 20,
+      60 + Math.random() * 30, // Higher to avoid camera clipping
       (Math.random() - 0.5) * 300
     )
     scene.add(cloudGroup)
@@ -603,18 +603,24 @@ function createPlayerShip() {
   const sideCannonGeom = new THREE.CylinderGeometry(0.15, 0.2, 1.2)
   const sideCannonMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
   
+  // Port side cannons - 3 cannons angled for cone fire
+  // i = -1 (front): 10° forward, i = 0 (middle): straight, i = 1 (back): 10° backward
   for (let i = -1; i <= 1; i++) {
     const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
     cannon.position.set(-1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
+    // Angle cannons: front one forward, back one backward
+    cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
     playerShip.add(cannon)
   }
   
-  // Starboard side cannons - 3 cannons
+  // Starboard side cannons - 3 cannons angled for cone fire
   for (let i = -1; i <= 1; i++) {
     const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
     cannon.position.set(1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
+    // Angle cannons: front one forward, back one backward
+    cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
     playerShip.add(cannon)
   }
 
@@ -934,9 +940,13 @@ function fireCannon(side) {
   else sidesToFire = [-1, 1] // Both
   
   for (const sideVal of sidesToFire) {
-    // Fire 3 cannons from this side
-    const sidePositions = [-2, 0, 2]
-    for (const zOffset of sidePositions) {
+    // Fire 3 cannons from this side with cone spread
+    const sidePositions = [-2, 0, 2] // front, middle, back
+    for (let i = 0; i < sidePositions.length; i++) {
+      const zOffset = sidePositions[i]
+      // Calculate cone angle: front cannon fires forward, back fires backward
+      const coneAngle = (i - 1) * (10 * Math.PI / 180) // -10°, 0°, +10°
+      
       const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
       const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
       const ball = new THREE.Mesh(ballGeometry, ballMaterial)
@@ -949,10 +959,12 @@ function fireCannon(side) {
       )
       
       const speed = 40
+      // Add cone angle to firing direction
+      const fireAngle = angle + sideVal * Math.PI / 2 + coneAngle
       cannonballs.push({
         mesh: ball,
-        vx: Math.sin(angle + sideVal * Math.PI / 2) * speed,
-        vz: Math.cos(angle + sideVal * Math.PI / 2) * speed,
+        vx: Math.sin(fireAngle) * speed,
+        vz: Math.cos(fireAngle) * speed,
         life: 3,
         isPlayer: true,
         spawnTime: Date.now()
