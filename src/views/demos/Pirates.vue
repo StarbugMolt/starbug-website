@@ -433,56 +433,56 @@ function createPlayerShip() {
   nest.add(nestFloor)
 
   // === WIND DIRECTION ARROW (at top of mast) ===
-  // Bigger and more transparent for visibility
+  // MUCH bigger and very transparent for visibility
   const windArrowGroup = new THREE.Group()
   
-  // Arrow pole - bigger
-  const poleGeom = new THREE.CylinderGeometry(0.08, 0.08, 2.5, 8)
+  // Arrow pole - MUCH bigger
+  const poleGeom = new THREE.CylinderGeometry(0.15, 0.15, 4, 8)
   const poleMat = new THREE.MeshPhongMaterial({ 
     color: 0xFFD700, 
     transparent: true, 
-    opacity: 0.7 
+    opacity: 0.4 
   })
   const pole = new THREE.Mesh(poleGeom, poleMat)
-  pole.position.y = 1.25
+  pole.position.y = 2
   windArrowGroup.add(pole)
   
-  // Arrow head - bigger and transparent
-  const arrowHeadGeom = new THREE.ConeGeometry(0.35, 0.7, 8)
+  // Arrow head - MUCH bigger and very transparent
+  const arrowHeadGeom = new THREE.ConeGeometry(0.6, 1.2, 8)
   const arrowHeadMat = new THREE.MeshPhongMaterial({ 
     color: 0xFF4500, 
     transparent: true, 
-    opacity: 0.8 
+    opacity: 0.5 
   })
   const arrowHead = new THREE.Mesh(arrowHeadGeom, arrowHeadMat)
   arrowHead.rotation.x = Math.PI / 2 // Point forward
-  arrowHead.position.y = 2.6
+  arrowHead.position.y = 4.5
   windArrowGroup.add(arrowHead)
   
-  // Tail fins - bigger and transparent
-  const finGeom = new THREE.BoxGeometry(0.6, 0.3, 0.05)
-  const finMat = new THREE.MeshPhongMaterial({ color: 0xFF4500, transparent: true, opacity: 0.8 })
+  // Tail fins - MUCH bigger
+  const finGeom = new THREE.BoxGeometry(1.0, 0.5, 0.08)
+  const finMat = new THREE.MeshPhongMaterial({ color: 0xFF4500, transparent: true, opacity: 0.5 })
   const fin1 = new THREE.Mesh(finGeom, finMat)
-  fin1.position.set(0, 2.2, 0)
+  fin1.position.set(0, 3.8, 0)
   windArrowGroup.add(fin1)
   const fin2 = new THREE.Mesh(finGeom, finMat)
   fin2.rotation.y = Math.PI / 2
-  fin2.position.set(0, 2.2, 0)
+  fin2.position.set(0, 3.8, 0)
   windArrowGroup.add(fin2)
   
-  // Add a flag pennant for extra visibility
-  const pennantGeom = new THREE.PlaneGeometry(0.8, 0.4, 4, 2)
+  // Add a BIG flag pennant for extra visibility
+  const pennantGeom = new THREE.PlaneGeometry(1.5, 0.8, 4, 2)
   const pennantMat = new THREE.MeshBasicMaterial({ 
     color: 0xFF6600, 
     transparent: true, 
-    opacity: 0.6,
+    opacity: 0.4,
     side: THREE.DoubleSide 
   })
   const pennant = new THREE.Mesh(pennantGeom, pennantMat)
-  pennant.position.set(0, 2.8, 0)
+  pennant.position.set(0, 5, 0)
   windArrowGroup.add(pennant)
   
-  windArrowGroup.position.set(0, 15, 0) // On top of mast
+  windArrowGroup.position.set(0, 16, 0) // On top of mast, very high
   playerShip.add(windArrowGroup)
   playerShip.userData.windArrow = windArrowGroup
 
@@ -823,12 +823,13 @@ function createEnemyShipMesh(shipType) {
   mesh.add(foreYard)
   
   // === SAILS WITH YARD ATTACHMENT ===
+  // Sails face FORWARD (along ship's length), not sideways
   // Main sail - proper square rig
   const sailGeom = new THREE.PlaneGeometry(5.5 * size, 6 * size, 10, 12)
   const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
   const sail = new THREE.Mesh(sailGeom, sailMat)
-  sail.position.set(0, 9.5 * size, 0)
-  sail.rotation.y = Math.PI / 2
+  sail.position.set(0, 9.5 * size, -0.5 * size) // Slightly forward
+  // No rotation - sail faces forward along Z axis
   sail.userData.isSail = true
   sail.userData.originalVertices = sailGeom.attributes.position.array.slice()
   sail.userData.fixedEdges = []
@@ -841,8 +842,8 @@ function createEnemyShipMesh(shipType) {
   // Lower sail
   const sail2Geom = new THREE.PlaneGeometry(4 * size, 4 * size, 8, 8)
   const sail2 = new THREE.Mesh(sail2Geom, sailMat)
-  sail2.position.set(0, 6 * size, 0)
-  sail2.rotation.y = Math.PI / 2
+  sail2.position.set(0, 6 * size, -0.5 * size)
+  // No rotation - faces forward
   sail2.userData.isSail = true
   sail2.userData.originalVertices = sail2Geom.attributes.position.array.slice()
   sail2.userData.fixedEdges = []
@@ -852,11 +853,11 @@ function createEnemyShipMesh(shipType) {
   }
   mesh.add(sail2)
   
-  // Fore sail
+  // Fore sail - faces forward
   const foreSailGeom = new THREE.PlaneGeometry(3.5 * size, 3.5 * size, 8, 8)
   const foreSail = new THREE.Mesh(foreSailGeom, sailMat)
-  foreSail.position.set(0, 7 * size, -2.5 * size)
-  foreSail.rotation.y = Math.PI / 2
+  foreSail.position.set(0, 7 * size, -3 * size)
+  // No rotation - faces forward
   foreSail.userData.isSail = true
   foreSail.userData.originalVertices = foreSailGeom.attributes.position.array.slice()
   foreSail.userData.fixedEdges = []
@@ -868,15 +869,15 @@ function createEnemyShipMesh(shipType) {
   
   mesh.userData.sails = [sail, sail2, foreSail]
   
-  // Flag
+  // Flag - faces forward
   const flagGeom = new THREE.PlaneGeometry(1.5 * size, 1 * size)
   let flagColor = 0x0000ff
   if (shipType === SHIP_TYPES.RAMMER) flagColor = 0xff0000
   else if (shipType === SHIP_TYPES.BIG) flagColor = 0xffff00
   const flagMat = new THREE.MeshBasicMaterial({ color: flagColor })
   const flag = new THREE.Mesh(flagGeom, flagMat)
-  flag.position.set(0, 13 * size, 0)
-  flag.rotation.y = Math.PI / 2
+  flag.position.set(0, 13 * size, -0.5 * size)
+  // No rotation - faces forward
   mesh.add(flag)
   
   // Rammer spike
