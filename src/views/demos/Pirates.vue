@@ -1078,10 +1078,11 @@ function spawnChunk(cx, cz) {
     spawnRock(rx, rz)
   }
   
-  // Spawn random ships (30% chance per chunk)
-  if (Math.random() < 0.3) {
+  // Spawn random ships (1-3 ships per chunk)
+  const numShips = 1 + Math.floor(Math.random() * 3)
+  for (let s = 0; s < numShips; s++) {
     const angle = Math.random() * Math.PI * 2
-    const dist = 50 + Math.random() * (CHUNK_SIZE / 3)
+    const dist = 30 + Math.random() * (CHUNK_SIZE / 2.5)
     const sx = worldX + Math.cos(angle) * dist
     const sz = worldZ + Math.sin(angle) * dist
     spawnRandomShip(sx, sz)
