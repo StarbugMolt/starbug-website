@@ -2030,14 +2030,17 @@ function update(dt) {
       }
     }
     
-    // Check for obstacles ahead
+    // Check for obstacles ahead (with randomness - AI isn't perfect)
     const lookAheadX = enemy.x + Math.sin(enemy.angle) * 15
     const lookAheadZ = enemy.z + Math.cos(enemy.angle) * 15
     const obstacleAhead = checkObstacleCollision(lookAheadX, lookAheadZ, 5)
     
+    // 15% chance to not notice obstacle (stupid AI)
+    const oblivious = Math.random() < 0.15
+    
     let moveAngle = targetAngle
     
-    if (obstacleAhead) {
+    if (obstacleAhead && !oblivious) {
       const leftCheck = checkObstacleCollision(
         enemy.x + Math.sin(enemy.angle + 0.5) * 10,
         enemy.z + Math.cos(enemy.angle + 0.5) * 10, 5
@@ -2047,8 +2050,11 @@ function update(dt) {
         enemy.z + Math.cos(enemy.angle - 0.5) * 10, 5
       )
       
-      if (!leftCheck && rightCheck) moveAngle = enemy.angle + 0.8 * dt
-      else if (!rightCheck && leftCheck) moveAngle = enemy.angle - 0.8 * dt
+      // 20% chance to pick wrong direction even if one is clear
+      const wrongChoice = Math.random() < 0.2
+      
+      if (!leftCheck && rightCheck && !wrongChoice) moveAngle = enemy.angle + 0.8 * dt
+      else if (!rightCheck && leftCheck && !wrongChoice) moveAngle = enemy.angle - 0.8 * dt
       else if (!leftCheck && !rightCheck) moveAngle = enemy.angle + (Math.random() > 0.5 ? 0.8 : -0.8) * dt
       else moveAngle = enemy.angle + Math.PI
     }
@@ -2064,6 +2070,18 @@ function update(dt) {
     // Enemy wake
     if (enemySpeed > 2 && Math.random() < 0.1) {
       spawnWakeParticle(enemy.x, enemy.z, enemy.angle, true)
+    }
+    
+    // Check if enemy hit an obstacle (takes damage)
+    if (checkObstacleCollision(enemy.x, enemy.z, 3)) {
+      enemy.hp -= 10 * dt
+      // Push away from obstacle slightly
+      const pushAngle = Math.random() * Math.PI * 2
+      enemy.x += Math.sin(pushAngle) * 2
+      enemy.z += Math.cos(pushAngle) * 2
+      if (Math.random() < 0.1) {
+        showMessage(`💥 ${enemy.type} hit an obstacle!`, 1000)
+      }
     }
     
     // Infinite world - no boundaries
