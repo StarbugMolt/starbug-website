@@ -2251,6 +2251,7 @@ function update(dt) {
     const dx = playerPos.value.x - enemy.x
     const dz = playerPos.value.z - enemy.z
     const distToPlayerSq = dx * dx + dz * dz
+    const distToPlayer = Math.sqrt(distToPlayerSq)
     
     // Skip AI for very distant enemies (already handled above, but double-check)
     if (distToPlayerSq > ACTIVE_DIST * ACTIVE_DIST) return
@@ -2799,7 +2800,7 @@ function updateEnemyIndicators() {
     const dz = kraken.value.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (dist < detectionRange) {
+    if (dist < ACTIVE_DIST) {
       const angleToKraken = Math.atan2(dx, dz) - playerAngle
       const screenX = 50 - Math.sin(angleToKraken) * 40
       const screenY = 50 - Math.cos(angleToKraken) * 30
