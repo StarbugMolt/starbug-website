@@ -86,6 +86,8 @@ Infinite procedural open-world pirate game with combat, treasure hunting, and bo
 ## 🐛 BUG FIXES LOG
 
 1. **Treasure ring position** - Needed world coordinates instead of local
+2. **Treasure not disappearing** - Added proper mesh disposal and early return after collection
+3. **Too many ships** - Reduced to 30% chance of 1 ship per chunk
 2. **Enemy disappearing instantly** - Now waits for sinking animation
 3. **Wind particles disappearing** - Added depthTest: false, renderOrder: 999
 4. **Cannon angles inverted** - Fixed symmetry between port/starboard
