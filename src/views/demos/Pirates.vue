@@ -1011,35 +1011,75 @@ function spawnChunk(cx, cz) {
   // Skip ships in starting chunk (0,0) - spawnEnemyShip handles initial enemies
   const isStartingChunk = (cx === 0 && cz === 0)
   
-  // Spawn islands (1-3 per chunk)
+  // Spawn islands (1-3 per chunk) - away from borders
   const numIslands = 1 + Math.floor(Math.random() * 3)
   for (let i = 0; i < numIslands; i++) {
     const angle = Math.random() * Math.PI * 2
-    const dist = Math.random() * (CHUNK_SIZE / 2 - 30)
+    const maxDist = (CHUNK_SIZE / 2) - 40 // Keep 40 units from edge
+    const dist = 20 + Math.random() * maxDist
     const ix = worldX + Math.cos(angle) * dist
     const iz = worldZ + Math.sin(angle) * dist
     spawnIsland(ix, iz)
   }
   
-  // Spawn rocks (3-6 per chunk)
+  // Spawn rocks (3-6 per chunk) - away from borders
   const numRocks = 3 + Math.floor(Math.random() * 4)
   for (let i = 0; i < numRocks; i++) {
     const angle = Math.random() * Math.PI * 2
-    const dist = Math.random() * (CHUNK_SIZE / 2 - 20)
+    const maxDist = (CHUNK_SIZE / 2) - 25
+    const dist = 15 + Math.random() * maxDist
     const rx = worldX + Math.cos(angle) * dist
     const rz = worldZ + Math.sin(angle) * dist
     spawnRock(rx, rz)
   }
   
   // Spawn random ships (0-3 ships per chunk) - skip starting chunk
+  // Spawn random ships (0-3 ships per chunk) - skip starting chunk
   if (!isStartingChunk) {
     const numShips = Math.floor(Math.random() * 4)
+    const chunkShips = []
+    
     for (let s = 0; s < numShips; s++) {
-    const angle = Math.random() * Math.PI * 2
-    const dist = 30 + Math.random() * (CHUNK_SIZE / 2.5)
-    const sx = worldX + Math.cos(angle) * dist
-    const sz = worldZ + Math.sin(angle) * dist
-    spawnRandomShip(sx, sz)
+      // Try to find a valid position (away from borders and other ships)
+      let sx, sz, valid
+      let attempts = 0
+      
+      do {
+        valid = true
+        const angle = Math.random() * Math.PI * 2
+        // Keep ships at least 30 units from chunk edge
+        const maxDist = (CHUNK_SIZE / 2) - 30
+        const dist = 30 + Math.random() * maxDist
+        sx = worldX + Math.cos(angle) * dist
+        sz = worldZ + Math.sin(angle) * dist
+        
+        // Check distance from other ships in this chunk
+        for (const other of chunkShips) {
+          const dx = sx - other.x
+          const dz = sz - other.z
+          if (Math.sqrt(dx * dx + dz * dz) < 20) {
+            valid = false
+            break
+          }
+        }
+        
+        // Check distance from existing enemies (avoid spawning on top)
+        for (const enemy of enemyShips.value) {
+          const dx = sx - enemy.x
+          const dz = sz - enemy.z
+          if (Math.sqrt(dx * dx + dz * dz) < 30) {
+            valid = false
+            break
+          }
+        }
+        
+        attempts++
+      } while (!valid && attempts < 10)
+      
+      if (valid) {
+        chunkShips.push({ x: sx, z: sz })
+        spawnRandomShip(sx, sz)
+      }
     }
   }
 }
