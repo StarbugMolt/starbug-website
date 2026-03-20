@@ -1992,8 +1992,8 @@ function update(dt) {
         tent.rotation.x = Math.PI / 2 - 0.3 + waveAmount
         
         // Check if should trigger smash attack
-        // Player must be close (within 20 units of kraken) and in front of this tentacle
-        if (dist < 25 && !anySmashing && tent.userData.smashCooldown <= 0) {
+        // Player must be close (within 35 units of kraken) and in front of this tentacle
+        if (dist < 35 && !anySmashing && tent.userData.smashCooldown <= 0) {
           const angleToPlayer = Math.atan2(dx, dz)
           let angleDiff = angleToPlayer - tent.userData.angle
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
