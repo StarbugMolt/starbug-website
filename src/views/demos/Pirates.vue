@@ -1285,27 +1285,20 @@ function createWindParticles() {
 }
 
 function resetWindParticle(particle) {
-  // Spawn in a wider area around player - more height variance
+  // Spawn particles in a cylinder around player area
   const angle = Math.random() * Math.PI * 2
-  const radius = 20 + Math.random() * 40
+  const radius = 15 + Math.random() * 35
   const x = playerPos.value.x + Math.cos(angle) * radius
   const z = playerPos.value.z + Math.sin(angle) * radius
-  const y = 1 + Math.random() * 15 // Much more height variance
+  const y = 1 + Math.random() * 10
   
   particle.userData = {
     x: x,
     y: y,
     z: z,
     life: 0,
-    maxLife: 4 + Math.random() * 3, // Live much longer
-    // Swirl parameters - unique per particle
-    swirlSpeed: 0.5 + Math.random() * 1.5,
-    swirlRadius: 0.5 + Math.random() * 1.5,
-    swirlPhase: Math.random() * Math.PI * 2,
-    // Vertical drift
-    vertDrift: (Math.random() - 0.3) * 0.5, // Slight upward tendency
-    // Individual offset for variation
-    speedMult: 0.7 + Math.random() * 0.6
+    maxLife: 3 + Math.random() * 2,
+    speedMult: 0.8 + Math.random() * 0.4
   }
   
   // Set initial positions
@@ -1319,68 +1312,56 @@ function resetWindParticle(particle) {
 }
 
 function updateWindParticles(dt) {
-  const time = Date.now() * 0.001
-  
   windParticles.forEach(particle => {
     particle.userData.life += dt
     
-    // Base wind movement
-    const baseSpeed = windSpeed.value * 4 * particle.userData.speedMult
-    const vx = Math.sin(windAngle) * baseSpeed
-    const vz = Math.cos(windAngle) * baseSpeed
+    // Move in wind direction - using current windAngle (smoothly transitioning)
+    const speed = windSpeed.value * 3 * particle.userData.speedMult
+    const vx = Math.sin(windAngle) * speed
+    const vz = Math.cos(windAngle) * speed
     
-    // Add swirling motion (like leaves)
-    const swirl = Math.sin(time * particle.userData.swirlSpeed + particle.userData.swirlPhase)
-    const swirlX = Math.cos(windAngle) * swirl * particle.userData.swirlRadius
-    const swirlZ = -Math.sin(windAngle) * swirl * particle.userData.swirlRadius
+    // Move particle
+    particle.userData.x += vx * dt
+    particle.userData.z += vz * dt
     
-    // Apply movement
-    particle.userData.x += (vx + swirlX) * dt
-    particle.userData.z += (vz + swirlZ) * dt
-    
-    // Vertical drift + bobbing
-    particle.userData.y += particle.userData.vertDrift * dt
-    particle.userData.y += Math.sin(time * 2 + particle.userData.swirlPhase) * 0.02 // Bobbing
-    
-    // Keep in reasonable height range
+    // Slight vertical bob
+    particle.userData.y += Math.sin(particle.userData.life * 2) * 0.3 * dt
     if (particle.userData.y < 1) particle.userData.y = 1
-    if (particle.userData.y > 15) particle.userData.y = 15
+    if (particle.userData.y > 12) particle.userData.y = 12
     
-    // Update trail positions - more organic
-    const trailLength = particle.userData.swirlRadius * 0.8
-    const tailX = particle.userData.x - vx * trailLength * 0.05 - swirlX * 0.5
-    const tailZ = particle.userData.z - vz * trailLength * 0.05 - swirlZ * 0.5
-    const tailY = particle.userData.y - particle.userData.vertDrift * trailLength * 0.1
+    // Update trail - short straight line showing direction
+    const trailLength = 0.8
+    const tailX = particle.userData.x - vx * trailLength * 0.15
+    const tailZ = particle.userData.z - vz * trailLength * 0.15
     
     const positions = particle.geometry.attributes.position.array
     positions[0] = particle.userData.x
     positions[1] = particle.userData.y
     positions[2] = particle.userData.z
     positions[3] = tailX
-    positions[4] = tailY
+    positions[4] = particle.userData.y
     positions[5] = tailZ
     
     particle.geometry.attributes.position.needsUpdate = true
     
-    // Fade based on life - slower fade
+    // Fade based on life
     const lifeRatio = particle.userData.life / particle.userData.maxLife
-    particle.material.opacity = 0.1 * (1 - Math.pow(lifeRatio, 2)) * (windSpeed.value / 5)
+    particle.material.opacity = 0.12 * (1 - lifeRatio) * (windSpeed.value / 5)
     
-    // Wrap particles around player instead of resetting - keep them always visible
+    // Reset when too far from player
     const dx = particle.userData.x - playerPos.value.x
     const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    // If too far or too old, respawn in front of player (in wind direction)
-    if (particle.userData.life > particle.userData.maxLife || dist > 80) {
-      // Spawn in a cone in front of player (where wind is blowing to)
-      const spawnAngle = windAngle + (Math.random() - 0.5) * 1.5 // Narrow cone
-      const spawnDist = 25 + Math.random() * 15
-      particle.userData.x = playerPos.value.x + Math.sin(spawnAngle) * spawnDist
-      particle.userData.z = playerPos.value.z + Math.cos(spawnAngle) * spawnDist
-      particle.userData.y = 1 + Math.random() * 15
+    // Respawn around player in a sphere (not just in wind direction)
+    if (particle.userData.life > particle.userData.maxLife || dist > 70) {
+      const spawnAngle = Math.random() * Math.PI * 2
+      const spawnRadius = 15 + Math.random() * 30
+      particle.userData.x = playerPos.value.x + Math.cos(spawnAngle) * spawnRadius
+      particle.userData.z = playerPos.value.z + Math.sin(spawnAngle) * spawnRadius
+      particle.userData.y = 1 + Math.random() * 10
       particle.userData.life = 0
-      particle.userData.maxLife = 4 + Math.random() * 3
+      particle.userData.maxLife = 3 + Math.random() * 2
     }
   })
 }
