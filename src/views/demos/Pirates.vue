@@ -1285,20 +1285,24 @@ function createWindParticles() {
 }
 
 function resetWindParticle(particle) {
-  // Spawn particles in a cylinder around player area
+  // Spawn particles in a full circle around player (entire viewport)
   const angle = Math.random() * Math.PI * 2
-  const radius = 15 + Math.random() * 35
+  const radius = 10 + Math.random() * 50 // Wider spread
   const x = playerPos.value.x + Math.cos(angle) * radius
   const z = playerPos.value.z + Math.sin(angle) * radius
-  const y = 1 + Math.random() * 10
+  const y = 1 + Math.random() * 12
   
   particle.userData = {
     x: x,
     y: y,
     z: z,
     life: 0,
-    maxLife: 3 + Math.random() * 2,
-    speedMult: 0.8 + Math.random() * 0.4
+    maxLife: 3 + Math.random() * 2.5,
+    // Swirl parameters
+    swirlSpeed: 0.8 + Math.random() * 1.2,
+    swirlRadius: 0.4 + Math.random() * 0.8,
+    swirlPhase: Math.random() * Math.PI * 2,
+    speedMult: 0.7 + Math.random() * 0.5
   }
   
   // Set initial positions
@@ -1312,56 +1316,64 @@ function resetWindParticle(particle) {
 }
 
 function updateWindParticles(dt) {
+  const time = Date.now() * 0.001
+  
   windParticles.forEach(particle => {
     particle.userData.life += dt
     
-    // Move in wind direction - using current windAngle (smoothly transitioning)
-    const speed = windSpeed.value * 3 * particle.userData.speedMult
-    const vx = Math.sin(windAngle) * speed
-    const vz = Math.cos(windAngle) * speed
+    // Base wind movement
+    const baseSpeed = windSpeed.value * 3.5 * particle.userData.speedMult
+    const vx = Math.sin(windAngle) * baseSpeed
+    const vz = Math.cos(windAngle) * baseSpeed
+    
+    // Add swirling motion (like leaves)
+    const swirl = Math.sin(time * particle.userData.swirlSpeed + particle.userData.swirlPhase)
+    const swirlX = Math.cos(windAngle) * swirl * particle.userData.swirlRadius
+    const swirlZ = -Math.sin(windAngle) * swirl * particle.userData.swirlRadius
     
     // Move particle
-    particle.userData.x += vx * dt
-    particle.userData.z += vz * dt
+    particle.userData.x += (vx + swirlX) * dt
+    particle.userData.z += (vz + swirlZ) * dt
     
-    // Slight vertical bob
-    particle.userData.y += Math.sin(particle.userData.life * 2) * 0.3 * dt
+    // Vertical bob
+    particle.userData.y += Math.sin(particle.userData.life * 2.5 + particle.userData.swirlPhase) * 0.25 * dt
     if (particle.userData.y < 1) particle.userData.y = 1
-    if (particle.userData.y > 12) particle.userData.y = 12
+    if (particle.userData.y > 13) particle.userData.y = 13
     
-    // Update trail - short straight line showing direction
-    const trailLength = 0.8
-    const tailX = particle.userData.x - vx * trailLength * 0.15
-    const tailZ = particle.userData.z - vz * trailLength * 0.15
+    // Update trail - shows direction with swirl
+    const trailLength = particle.userData.swirlRadius
+    const tailX = particle.userData.x - (vx + swirlX * 0.3) * trailLength * 0.2
+    const tailZ = particle.userData.z - (vz + swirlZ * 0.3) * trailLength * 0.2
+    const tailY = particle.userData.y
     
     const positions = particle.geometry.attributes.position.array
     positions[0] = particle.userData.x
     positions[1] = particle.userData.y
     positions[2] = particle.userData.z
     positions[3] = tailX
-    positions[4] = particle.userData.y
+    positions[4] = tailY
     positions[5] = tailZ
     
     particle.geometry.attributes.position.needsUpdate = true
     
     // Fade based on life
     const lifeRatio = particle.userData.life / particle.userData.maxLife
-    particle.material.opacity = 0.12 * (1 - lifeRatio) * (windSpeed.value / 5)
+    particle.material.opacity = 0.1 * (1 - lifeRatio) * (windSpeed.value / 5)
     
-    // Reset when too far from player
+    // Reset when too far from player - spawn anywhere around player
     const dx = particle.userData.x - playerPos.value.x
     const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    // Respawn around player in a sphere (not just in wind direction)
-    if (particle.userData.life > particle.userData.maxLife || dist > 70) {
+    if (particle.userData.life > particle.userData.maxLife || dist > 80) {
+      // Spawn anywhere in full circle around player
       const spawnAngle = Math.random() * Math.PI * 2
-      const spawnRadius = 15 + Math.random() * 30
+      const spawnRadius = 10 + Math.random() * 45
       particle.userData.x = playerPos.value.x + Math.cos(spawnAngle) * spawnRadius
       particle.userData.z = playerPos.value.z + Math.sin(spawnAngle) * spawnRadius
-      particle.userData.y = 1 + Math.random() * 10
+      particle.userData.y = 1 + Math.random() * 12
       particle.userData.life = 0
-      particle.userData.maxLife = 3 + Math.random() * 2
+      particle.userData.maxLife = 3 + Math.random() * 2.5
     }
   })
 }
