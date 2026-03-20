@@ -425,6 +425,39 @@ function createPlayerShip() {
   nestFloor.position.y = -0.2
   nest.add(nestFloor)
 
+  // === WIND DIRECTION ARROW (at top of mast) ===
+  const windArrowGroup = new THREE.Group()
+  
+  // Arrow pole
+  const poleGeom = new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6)
+  const poleMat = new THREE.MeshPhongMaterial({ color: 0xFFD700 }) // Gold pole
+  const pole = new THREE.Mesh(poleGeom, poleMat)
+  pole.position.y = 0.75
+  windArrowGroup.add(pole)
+  
+  // Arrow head (points in wind direction)
+  const arrowHeadGeom = new THREE.ConeGeometry(0.15, 0.4, 8)
+  const arrowHeadMat = new THREE.MeshPhongMaterial({ color: 0xFF4500 }) // Orange-red
+  const arrowHead = new THREE.Mesh(arrowHeadGeom, arrowHeadMat)
+  arrowHead.rotation.x = Math.PI / 2 // Point forward
+  arrowHead.position.y = 1.7
+  windArrowGroup.add(arrowHead)
+  
+  // Tail fins
+  const finGeom = new THREE.BoxGeometry(0.3, 0.15, 0.02)
+  const finMat = new THREE.MeshPhongMaterial({ color: 0xFF4500 })
+  const fin1 = new THREE.Mesh(finGeom, finMat)
+  fin1.position.set(0, 1.4, 0)
+  windArrowGroup.add(fin1)
+  const fin2 = new THREE.Mesh(finGeom, finMat)
+  fin2.rotation.y = Math.PI / 2
+  fin2.position.set(0, 1.4, 0)
+  windArrowGroup.add(fin2)
+  
+  windArrowGroup.position.set(0, 13, 0)
+  playerShip.add(windArrowGroup)
+  playerShip.userData.windArrow = windArrowGroup
+
   // Fore mast
   const foreMastGeom = new THREE.CylinderGeometry(0.18, 0.22, 7, 8)
   const foreMast = new THREE.Mesh(foreMastGeom, mastMaterial)
@@ -1244,13 +1277,24 @@ function checkObstacleCollision(x, z, radius) {
 function update(dt) {
   if (gameState.value !== 'playing') return
   
-  // Update wind
+  // Update wind - more dynamic changes
   windChangeTimer -= dt
   if (windChangeTimer <= 0) {
-    windAngle += (Math.random() - 0.5) * 0.5
-    windSpeed.value = 2 + Math.random() * 4
-    windChangeTimer = 5 + Math.random() * 5
-    showMessage(`💨 Wind shifted to ${getWindDirection()}!`, 2000)
+    // Wind can change by 45-180 degrees each shift
+    const shiftAmount = (Math.random() * 2 + 0.5) * (Math.random() > 0.5 ? 1 : -1)
+    windAngle += shiftAmount
+    windSpeed.value = 2 + Math.random() * 5 // More variation in speed
+    windChangeTimer = 3 + Math.random() * 4 // Changes every 3-7 seconds
+    showMessage(`💨 Wind: ${getWindDirection()} at ${windSpeed.value.toFixed(1)} kn`, 2000)
+  }
+  
+  // Update wind indicator arrow on mast
+  if (playerShip) {
+    const windArrow = playerShip.userData.windArrow
+    if (windArrow) {
+      // Arrow points in wind direction (opposite to where wind comes FROM)
+      windArrow.rotation.y = windAngle
+    }
   }
   
   // Animate sails
