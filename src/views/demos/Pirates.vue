@@ -1366,13 +1366,21 @@ function updateWindParticles(dt) {
     const lifeRatio = particle.userData.life / particle.userData.maxLife
     particle.material.opacity = 0.1 * (1 - Math.pow(lifeRatio, 2)) * (windSpeed.value / 5)
     
-    // Reset only when too far from player
+    // Wrap particles around player instead of resetting - keep them always visible
     const dx = particle.userData.x - playerPos.value.x
     const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (particle.userData.life > particle.userData.maxLife || dist > 60) {
-      resetWindParticle(particle)
+    // If too far or too old, respawn in front of player (in wind direction)
+    if (particle.userData.life > particle.userData.maxLife || dist > 80) {
+      // Spawn in a cone in front of player (where wind is blowing to)
+      const spawnAngle = windAngle + (Math.random() - 0.5) * 1.5 // Narrow cone
+      const spawnDist = 25 + Math.random() * 15
+      particle.userData.x = playerPos.value.x + Math.sin(spawnAngle) * spawnDist
+      particle.userData.z = playerPos.value.z + Math.cos(spawnAngle) * spawnDist
+      particle.userData.y = 1 + Math.random() * 15
+      particle.userData.life = 0
+      particle.userData.maxLife = 4 + Math.random() * 3
     }
   })
 }
