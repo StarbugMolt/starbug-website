@@ -722,80 +722,142 @@ function createEnemyShipMesh(shipType) {
   const mesh = new THREE.Group()
   const size = shipType.size
   const woodMat = new THREE.MeshPhongMaterial({ color: 0x654321 })
-  const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+  const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
   
-  // === HULL ===
-  const hullGeom = new THREE.BoxGeometry(3 * size, 2 * size, 8 * size)
+  // === IMPROVED HULL (tapered shape) ===
+  const hullShape = new THREE.Shape()
+  hullShape.moveTo(-1.5 * size, -4 * size)
+  hullShape.lineTo(1.5 * size, -4 * size)
+  hullShape.lineTo(1.8 * size, 0)
+  hullShape.lineTo(1.5 * size, 4 * size)
+  hullShape.lineTo(-1.5 * size, 4 * size)
+  hullShape.lineTo(-1.8 * size, 0)
+  hullShape.closePath()
+  
+  const extrudeSettings = { depth: 2 * size, bevelEnabled: true, bevelThickness: 0.2 * size, bevelSize: 0.1 * size, bevelSegments: 2 }
+  const hullGeom = new THREE.ExtrudeGeometry(hullShape, extrudeSettings)
   const hullMat = new THREE.MeshPhongMaterial({ color: shipType.color })
   const hull = new THREE.Mesh(hullGeom, hullMat)
-  hull.position.y = 1 * size
+  hull.rotation.x = -Math.PI / 2
+  hull.position.y = 0.5 * size
   mesh.add(hull)
   
+  // Hull stripe
+  const stripeGeom = new THREE.BoxGeometry(3.2 * size, 0.15 * size, 8.5 * size)
+  const stripeMat = new THREE.MeshPhongMaterial({ color: 0x8B0000 })
+  const stripe = new THREE.Mesh(stripeGeom, stripeMat)
+  stripe.position.y = 1.3 * size
+  mesh.add(stripe)
+  
   // Deck
-  const deckGeom = new THREE.BoxGeometry(2.5 * size, 0.2 * size, 7 * size)
+  const deckGeom = new THREE.BoxGeometry(2.8 * size, 0.25 * size, 7.5 * size)
   const deckMat = new THREE.MeshPhongMaterial({ color: 0xDEB887 })
   const deck = new THREE.Mesh(deckGeom, deckMat)
-  deck.position.y = 2 * size
+  deck.position.y = 2.1 * size
   mesh.add(deck)
   
-  // Main mast - centered at z=0
+  // Railings
+  const railMat = new THREE.MeshPhongMaterial({ color: 0x3D2817 })
+  for (let i = 0; i < 6; i++) {
+    const railPost = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 1 * size), railMat)
+    railPost.position.set(-1.3 * size, 2.7 * size, -3 + i * 1.2 * size)
+    mesh.add(railPost)
+    const railPost2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 1 * size), railMat)
+    railPost2.position.set(1.3 * size, 2.7 * size, -3 + i * 1.2 * size)
+    mesh.add(railPost2)
+  }
+  
+  // === MASTS ===
+  // Main mast
   const mainMast = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2 * size, 0.25 * size, 10 * size, 8),
+    new THREE.CylinderGeometry(0.25 * size, 0.3 * size, 12 * size, 8),
     woodMat
   )
-  mainMast.position.set(0, 6 * size, 0)
+  mainMast.position.set(0, 7.5 * size, 0)
   mesh.add(mainMast)
   
-  // Main sail - ROTATED 90 degrees so it faces sideways (perpendicular to ship)
-  // This is how real square rig ships work - sails extend out from the yards
-  const mainSail = new THREE.Mesh(
-    new THREE.PlaneGeometry(5 * size, 5 * size),
-    sailMat
-  )
-  mainSail.position.set(0, 8 * size, 0)
-  mainSail.rotation.y = Math.PI / 2 // Rotate to face sideways
-  mesh.add(mainSail)
-  
-  // Fore mast - at front of ship
-  const foreMast = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15 * size, 0.18 * size, 6 * size, 8),
+  // Main yard (horizontal spar)
+  const yard1 = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.06 * size, 0.06 * size, 7 * size, 8),
     woodMat
   )
-  foreMast.position.set(0, 4 * size, -3 * size)
-  mesh.add(foreMast)
+  yard1.rotation.z = Math.PI / 2
+  yard1.position.set(0, 12 * size, 0)
+  mesh.add(yard1)
   
-  // Fore sail - also sideways
-  const foreSail = new THREE.Mesh(
-    new THREE.PlaneGeometry(3 * size, 3 * size),
+  // Main sail - attached to yard, faces sideways
+  const mainSail = new THREE.Mesh(
+    new THREE.PlaneGeometry(6 * size, 6 * size),
     sailMat
   )
-  foreSail.position.set(0, 5 * size, -3 * size)
+  mainSail.position.set(0, 10 * size, 0)
+  mainSail.rotation.y = Math.PI / 2
+  mesh.add(mainSail)
+  
+  // Lower yard and sail
+  const yard2 = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 5 * size, 8),
+    woodMat
+  )
+  yard2.rotation.z = Math.PI / 2
+  yard2.position.set(0, 7 * size, 0)
+  mesh.add(yard2)
+  
+  const lowerSail = new THREE.Mesh(
+    new THREE.PlaneGeometry(4 * size, 4 * size),
+    sailMat
+  )
+  lowerSail.position.set(0, 5.5 * size, 0)
+  lowerSail.rotation.y = Math.PI / 2
+  mesh.add(lowerSail)
+  
+  // Fore mast
+  const foreMast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18 * size, 0.22 * size, 8 * size, 8),
+    woodMat
+  )
+  foreMast.position.set(0, 5 * size, -3 * size)
+  mesh.add(foreMast)
+  
+  // Fore yard
+  const foreYard = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 4 * size, 8),
+    woodMat
+  )
+  foreYard.rotation.z = Math.PI / 2
+  foreYard.position.set(0, 7.5 * size, -3 * size)
+  mesh.add(foreYard)
+  
+  // Fore sail
+  const foreSail = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.5 * size, 3.5 * size),
+    sailMat
+  )
+  foreSail.position.set(0, 6 * size, -3 * size)
   foreSail.rotation.y = Math.PI / 2
   mesh.add(foreSail)
   
-  // Flag at top of main mast
-  const flag = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.2 * size, 0.8 * size),
-    new THREE.MeshBasicMaterial({ 
-      color: shipType === SHIP_TYPES.RAMMER ? 0xff0000 : (shipType === SHIP_TYPES.BIG ? 0xffff00 : 0x0000ff) 
-    })
-  )
-  flag.position.set(0, 11 * size, 0)
+  // Flag
+  const flagMat = new THREE.MeshBasicMaterial({ 
+    color: shipType === SHIP_TYPES.RAMMER ? 0xff0000 : (shipType === SHIP_TYPES.BIG ? 0xffff00 : 0x0000ff) 
+  })
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.5 * size, 1 * size), flagMat)
+  flag.position.set(0, 13 * size, 0)
   flag.rotation.y = Math.PI / 2
   mesh.add(flag)
   
   // Rammer spike
   if (shipType === SHIP_TYPES.RAMMER) {
     const spike = new THREE.Mesh(
-      new THREE.ConeGeometry(0.3 * size, 3 * size, 6),
-      new THREE.MeshPhongMaterial({ color: 0x888888, metalness: 0.8 })
+      new THREE.ConeGeometry(0.35 * size, 4 * size, 6),
+      new THREE.MeshPhongMaterial({ color: 0x888888, metalness: 0.9 })
     )
     spike.rotation.x = -Math.PI / 2
     spike.position.set(0, 1 * size, 5 * size)
     mesh.add(spike)
   }
   
-  // No sails to animate for enemies (simpler)
+  // No animated sails for enemies
   mesh.userData.sails = []
   
   return mesh
@@ -1197,23 +1259,23 @@ function animateSails(dt) {
 
 // Wind particles system
 let windParticles = []
-const maxWindParticles = 100
+const maxWindParticles = 60
 
 function createWindParticles() {
   for (let i = 0; i < maxWindParticles; i++) {
+    // Each wind particle is a line (trail)
     const geometry = new THREE.BufferGeometry()
-    const positions = new Float32Array(3)
+    const positions = new Float32Array(6) // 2 points per line
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     
-    const material = new THREE.PointsMaterial({
+    const material = new THREE.LineBasicMaterial({
       color: 0xffffff,
-      size: 0.15,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.3,
       blending: THREE.AdditiveBlending
     })
     
-    const particle = new THREE.Points(geometry, material)
+    const particle = new THREE.Line(geometry, material)
     resetWindParticle(particle)
     scene.add(particle)
     windParticles.push(particle)
@@ -1223,35 +1285,68 @@ function createWindParticles() {
 function resetWindParticle(particle) {
   // Spawn particles around the player in a radius
   const angle = Math.random() * Math.PI * 2
-  const radius = 30 + Math.random() * 20
-  particle.position.x = playerPos.value.x + Math.cos(angle) * radius
-  particle.position.y = 2 + Math.random() * 8
-  particle.position.z = playerPos.value.z + Math.sin(angle) * radius
-  particle.userData.life = 0
-  particle.userData.maxLife = 2 + Math.random() * 2
+  const radius = 25 + Math.random() * 25
+  const x = playerPos.value.x + Math.cos(angle) * radius
+  const z = playerPos.value.z + Math.sin(angle) * radius
+  const y = 2 + Math.random() * 8
+  
+  particle.userData = {
+    x: x,
+    y: y,
+    z: z,
+    life: 0,
+    maxLife: 1.5 + Math.random() * 1.5,
+    trailLength: 3 + Math.random() * 2
+  }
+  
+  // Set initial positions
+  const positions = particle.geometry.attributes.position.array
+  positions[0] = x
+  positions[1] = y
+  positions[2] = z
+  positions[3] = x
+  positions[4] = y
+  positions[5] = z
 }
 
 function updateWindParticles(dt) {
-  const time = Date.now() * 0.001
-  
   windParticles.forEach(particle => {
     particle.userData.life += dt
     
-    // Move particles in wind direction
-    const speed = windSpeed.value * 2
-    particle.position.x += Math.sin(windAngle) * speed * dt
-    particle.position.z += Math.cos(windAngle) * speed * dt
+    // Move in wind direction
+    const speed = windSpeed.value * 3
+    const vx = Math.sin(windAngle) * speed
+    const vz = Math.cos(windAngle) * speed
+    
+    particle.userData.x += vx * dt
+    particle.userData.z += vz * dt
+    
+    // Update trail positions (head and tail)
+    const positions = particle.geometry.attributes.position.array
+    const tailX = particle.userData.x - vx * particle.userData.trailLength * 0.1
+    const tailZ = particle.userData.z - vz * particle.userData.trailLength * 0.1
+    
+    // Head (current position)
+    positions[0] = particle.userData.x
+    positions[1] = particle.userData.y
+    positions[2] = particle.userData.z
+    // Tail (behind - shows direction)
+    positions[3] = tailX
+    positions[4] = particle.userData.y
+    positions[5] = tailZ
+    
+    particle.geometry.attributes.position.needsUpdate = true
     
     // Fade based on life
     const lifeRatio = particle.userData.life / particle.userData.maxLife
-    particle.material.opacity = 0.4 * (1 - lifeRatio) * (windSpeed.value / 6)
+    particle.material.opacity = 0.25 * (1 - lifeRatio) * (windSpeed.value / 5)
     
     // Reset if too old or too far from player
-    const dx = particle.position.x - playerPos.value.x
-    const dz = particle.position.z - playerPos.value.z
+    const dx = particle.userData.x - playerPos.value.x
+    const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (particle.userData.life > particle.userData.maxLife || dist > 60) {
+    if (particle.userData.life > particle.userData.maxLife || dist > 50) {
       resetWindParticle(particle)
     }
   })
