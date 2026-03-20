@@ -432,60 +432,6 @@ function createPlayerShip() {
   nestFloor.position.y = -0.2
   nest.add(nestFloor)
 
-  // === WIND DIRECTION ARROW (at top of mast) ===
-  // MUCH bigger and very transparent for visibility
-  const windArrowGroup = new THREE.Group()
-  
-  // Arrow pole - MUCH bigger
-  const poleGeom = new THREE.CylinderGeometry(0.15, 0.15, 4, 8)
-  const poleMat = new THREE.MeshPhongMaterial({ 
-    color: 0xFFD700, 
-    transparent: true, 
-    opacity: 0.4 
-  })
-  const pole = new THREE.Mesh(poleGeom, poleMat)
-  pole.position.y = 2
-  windArrowGroup.add(pole)
-  
-  // Arrow head - MUCH bigger and very transparent
-  const arrowHeadGeom = new THREE.ConeGeometry(0.6, 1.2, 8)
-  const arrowHeadMat = new THREE.MeshPhongMaterial({ 
-    color: 0xFF4500, 
-    transparent: true, 
-    opacity: 0.5 
-  })
-  const arrowHead = new THREE.Mesh(arrowHeadGeom, arrowHeadMat)
-  arrowHead.rotation.x = Math.PI / 2 // Point forward
-  arrowHead.position.y = 4.5
-  windArrowGroup.add(arrowHead)
-  
-  // Tail fins - MUCH bigger
-  const finGeom = new THREE.BoxGeometry(1.0, 0.5, 0.08)
-  const finMat = new THREE.MeshPhongMaterial({ color: 0xFF4500, transparent: true, opacity: 0.5 })
-  const fin1 = new THREE.Mesh(finGeom, finMat)
-  fin1.position.set(0, 3.8, 0)
-  windArrowGroup.add(fin1)
-  const fin2 = new THREE.Mesh(finGeom, finMat)
-  fin2.rotation.y = Math.PI / 2
-  fin2.position.set(0, 3.8, 0)
-  windArrowGroup.add(fin2)
-  
-  // Add a BIG flag pennant for extra visibility
-  const pennantGeom = new THREE.PlaneGeometry(1.5, 0.8, 4, 2)
-  const pennantMat = new THREE.MeshBasicMaterial({ 
-    color: 0xFF6600, 
-    transparent: true, 
-    opacity: 0.4,
-    side: THREE.DoubleSide 
-  })
-  const pennant = new THREE.Mesh(pennantGeom, pennantMat)
-  pennant.position.set(0, 5, 0)
-  windArrowGroup.add(pennant)
-  
-  windArrowGroup.position.set(0, 16, 0) // On top of mast, very high
-  playerShip.add(windArrowGroup)
-  playerShip.userData.windArrow = windArrowGroup
-
   // Fore mast
   const foreMastGeom = new THREE.CylinderGeometry(0.18, 0.22, 7, 8)
   const foreMast = new THREE.Mesh(foreMastGeom, mastMaterial)
@@ -756,7 +702,9 @@ function spawnEnemyShip() {
       maxHp: shipType.hp,
       angle: 0,
       type: type,
-      lastShot: 0
+      lastShot: 0,
+      sinking: false,
+      sinkingTime: 0
     }
     enemyShips.value.push(enemy)
     
@@ -828,7 +776,7 @@ function createEnemyShipMesh(shipType) {
   const sailGeom = new THREE.PlaneGeometry(5.5 * size, 6 * size, 10, 12)
   const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
   const sail = new THREE.Mesh(sailGeom, sailMat)
-  sail.position.set(0, 9.5 * size, -0.5 * size) // Slightly forward
+  sail.position.set(0, 9.5 * size, 1 * size) // Forward (in front of mast)
   // No rotation - sail faces forward along Z axis
   sail.userData.isSail = true
   sail.userData.originalVertices = sailGeom.attributes.position.array.slice()
@@ -842,7 +790,7 @@ function createEnemyShipMesh(shipType) {
   // Lower sail
   const sail2Geom = new THREE.PlaneGeometry(4 * size, 4 * size, 8, 8)
   const sail2 = new THREE.Mesh(sail2Geom, sailMat)
-  sail2.position.set(0, 6 * size, -0.5 * size)
+  sail2.position.set(0, 6 * size, 1 * size)
   // No rotation - faces forward
   sail2.userData.isSail = true
   sail2.userData.originalVertices = sail2Geom.attributes.position.array.slice()
@@ -856,7 +804,7 @@ function createEnemyShipMesh(shipType) {
   // Fore sail - faces forward
   const foreSailGeom = new THREE.PlaneGeometry(3.5 * size, 3.5 * size, 8, 8)
   const foreSail = new THREE.Mesh(foreSailGeom, sailMat)
-  foreSail.position.set(0, 7 * size, -3 * size)
+  foreSail.position.set(0, 7 * size, -1 * size)
   // No rotation - faces forward
   foreSail.userData.isSail = true
   foreSail.userData.originalVertices = foreSailGeom.attributes.position.array.slice()
@@ -1389,15 +1337,6 @@ function update(dt) {
     showMessage(`💨 Wind: ${getWindDirection()} at ${windSpeed.value.toFixed(1)} kn`, 2000)
   }
   
-  // Update wind indicator arrow on mast
-  if (playerShip) {
-    const windArrow = playerShip.userData.windArrow
-    if (windArrow) {
-      // Arrow points in wind direction (opposite to where wind comes FROM)
-      windArrow.rotation.y = windAngle
-    }
-  }
-  
   // Animate sails
   animateSails(dt)
   
@@ -1695,9 +1634,42 @@ function update(dt) {
     }
   })
   
-  // Check if all enemies destroyed
-  const aliveEnemies = enemyShips.value.filter(e => e.hp > 0)
-  if (aliveEnemies.length === 0 && enemyShipMeshes.length > 0) {
+  // === SINKING ANIMATION ===
+  enemyShips.value.forEach((enemy, index) => {
+    if (enemy.hp <= 0 && !enemy.sinking) {
+      // Start sinking
+      enemy.sinking = true
+      enemy.sinkingTime = 0
+      const shipType = SHIP_TYPES[enemy.type]
+      showMessage(`💀 ${shipType.name} sinking!`)
+    }
+    
+    if (enemy.sinking) {
+      enemy.sinkingTime += dt
+      const mesh = enemyShipMeshes[index]
+      if (mesh) {
+        // Sink into water and rotate
+        mesh.position.y = -enemy.sinkingTime * 2 // Sink down
+        mesh.rotation.x = Math.min(Math.PI / 2, enemy.sinkingTime * 0.3) // Tilt back
+        mesh.rotation.z = Math.sin(enemy.sinkingTime * 3) * 0.1 // Slight wobble
+      }
+    }
+  })
+  
+  // Remove fully sunk enemies
+  for (let i = enemyShips.value.length - 1; i >= 0; i--) {
+    if (enemyShips.value[i].sinking && enemyShips.value[i].sinkingTime > 3) {
+      // Remove after 3 seconds of sinking
+      const mesh = enemyShipMeshes[i]
+      if (mesh) scene.remove(mesh)
+      enemyShipMeshes.splice(i, 1)
+      enemyShips.value.splice(i, 1)
+    }
+  }
+  
+  // Check if all enemies destroyed (exclude sinking)
+  const activeEnemies = enemyShips.value.filter(e => e.hp > 0 && !e.sinking)
+  if (activeEnemies.length === 0 && enemyShips.value.some(e => e.sinking)) {
     // All enemies destroyed!
     enemyShipMeshes.forEach(mesh => scene.remove(mesh))
     enemyShipMeshes = []
