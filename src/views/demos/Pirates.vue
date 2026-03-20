@@ -1428,11 +1428,22 @@ function updateTreasure(dt) {
       gold.value += coins
       showMessage(`💰 +${coins} Gold!`, 3000)
       
-      // Remove treasure
-      scene.remove(t.mesh)
-      scene.remove(t.ringMesh)
+      // Remove treasure meshes from scene
+      if (t.mesh) {
+        scene.remove(t.mesh)
+        t.mesh.geometry?.dispose()
+        t.mesh.material?.dispose()
+      }
+      if (t.ringMesh) {
+        scene.remove(t.ringMesh)
+        t.ringMesh.geometry?.dispose()
+        t.ringMesh.material?.dispose()
+      }
+      
+      // Clear treasure reference completely
       treasure.value = null
       treasureCollectTimer = 0
+      return // Stop processing
     }
   } else {
     t.collecting = false
@@ -1442,9 +1453,18 @@ function updateTreasure(dt) {
   // Expired treasure
   if (t.timer <= 0) {
     showMessage('💨 Treasure lost to the sea...', 2000)
-    scene.remove(t.mesh)
-    scene.remove(t.ringMesh)
+    if (t.mesh) {
+      scene.remove(t.mesh)
+      t.mesh.geometry?.dispose()
+      t.mesh.material?.dispose()
+    }
+    if (t.ringMesh) {
+      scene.remove(t.ringMesh)
+      t.ringMesh.geometry?.dispose()
+      t.ringMesh.material?.dispose()
+    }
     treasure.value = null
+    return
   }
   
   // Update mesh positions (world coordinates)
