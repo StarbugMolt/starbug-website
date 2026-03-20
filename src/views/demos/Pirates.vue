@@ -1284,7 +1284,7 @@ function update(dt) {
     const shiftAmount = (Math.random() * 2 + 0.5) * (Math.random() > 0.5 ? 1 : -1)
     windAngle += shiftAmount
     windSpeed.value = 2 + Math.random() * 5 // More variation in speed
-    windChangeTimer = 3 + Math.random() * 4 // Changes every 3-7 seconds
+    windChangeTimer = 12 + Math.random() * 5 // Changes every 12-17 seconds
     showMessage(`💨 Wind: ${getWindDirection()} at ${windSpeed.value.toFixed(1)} kn`, 2000)
   }
   
