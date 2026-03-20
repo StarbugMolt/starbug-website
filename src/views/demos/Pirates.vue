@@ -13,11 +13,28 @@
       <div class="hud-right">
         <div class="stat">💣 Port: {{ portCooldown > 0 ? portCooldown.toFixed(1) + 's' : 'READY' }}</div>
         <div class="stat">💣 Stbd: {{ starboardCooldown > 0 ? starboardCooldown.toFixed(1) + 's' : 'READY' }}</div>
-        <div class="stat">⚓ Target: {{ enemyShip.hp > 0 ? 'Enemy Ship' : (kraken.hp > 0 ? 'KRAKEN' : 'Victory!') }}</div>
+        <div class="stat">⚓ Enemies: {{ aliveEnemies }} / 3 | Kraken: {{ kraken.hp > 0 ? 'ACTIVE' : (aliveEnemies === 0 ? 'NEXT' : '---') }}</div>
       </div>
     </div>
 
     <canvas ref="canvas"></canvas>
+
+    <!-- Enemy indicator arrows -->
+    <div class="indicators">
+      <div 
+        v-for="(enemy, index) in enemyIndicators" 
+        :key="index"
+        class="indicator"
+        :style="{ 
+          left: enemy.x + '%', 
+          top: enemy.y + '%',
+          transform: 'translate(-50%, -50%) rotate(' + enemy.angle + 'rad)'
+        }"
+      >
+        <span class="indicator-icon">{{ enemy.icon }}</span>
+        <span class="indicator-label">{{ enemy.label }}</span>
+      </div>
+    </div>
 
     <div class="controls">
       <div class="control-hint">🎯 Click to lock | Move mouse to steer | LMB=Starboard | RMB=Port | 🖱️ Scroll = Camera | Avoid rocks!</div>
@@ -48,7 +65,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 
 const container = ref(null)
@@ -62,6 +79,10 @@ const victory = ref(false)
 const hp = ref(100)
 const gold = ref(0)
 const message = ref('')
+const enemyIndicators = ref([]) // For directional indicators
+
+// Computed for HUD
+const aliveEnemies = computed(() => enemyShips.value.filter(e => e.hp > 0).length)
 const cannonCooldown = ref(0) // Both sides
 const portCooldown = ref(0) // Left side
 const starboardCooldown = ref(0) // Right side
@@ -88,9 +109,16 @@ let cannonballs = []
 let playerWake = []
 const maxWakeParticles = 50
 
-// Enemy ship
-const enemyShip = ref({ x: 100, z: -100, hp: 100, angle: 0 })
-let enemyShipMesh
+// Enemy ships - array for multiple enemies
+const enemyShips = ref([]) // { x, z, hp, maxHp, angle, type, mesh }
+let enemyShipMeshes = [] // Array of meshes
+
+// Enemy ship types
+const SHIP_TYPES = {
+  RAMMER: { name: 'Rammer', hp: 150, speed: 8, rammingDamage: 20, cannonDamage: 5, color: 0x333333, size: 1.2 },
+  NORMAL: { name: 'Sloop', hp: 80, speed: 6, rammingDamage: 10, cannonDamage: 10, color: 0x8B0000, size: 1.0 },
+  BIG: { name: 'Galleon', hp: 200, speed: 4, rammingDamage: 10, cannonDamage: 15, color: 0x000080, size: 1.8 }
+}
 
 // Kraken
 const kraken = ref({ x: 0, z: 0, hp: 150, angle: 0, tentacles: [] })
@@ -640,64 +668,98 @@ function createIslands() {
   }
 }
 
+// Spawn enemy ships - one of each type
 function spawnEnemyShip() {
-  if (enemyShipMesh) scene.remove(enemyShipMesh)
+  // Clear existing enemies
+  enemyShipMeshes.forEach(mesh => scene.remove(mesh))
+  enemyShipMeshes = []
+  enemyShips.value = []
   
-  enemyShipMesh = new THREE.Group()
+  // Spawn 3 different enemy types at different positions
+  const types = ['RAMMER', 'NORMAL', 'BIG']
+  const positions = [
+    { x: 200, z: -200 },
+    { x: -180, z: -250 },
+    { x: 100, z: -300 }
+  ]
   
-  // Red hull (British navy)
-  const hullGeometry = new THREE.BoxGeometry(3.5, 2.5, 10)
-  const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x8B0000 })
-  const hull = new THREE.Mesh(hullGeometry, hullMaterial)
-  hull.position.y = 1.5
-  enemyShipMesh.add(hull)
+  types.forEach((type, index) => {
+    const shipType = SHIP_TYPES[type]
+    const pos = positions[index]
+    
+    // Create enemy data
+    const enemy = {
+      x: pos.x,
+      z: pos.z,
+      hp: shipType.hp,
+      maxHp: shipType.hp,
+      angle: 0,
+      type: type,
+      lastShot: 0
+    }
+    enemyShips.value.push(enemy)
+    
+    // Create mesh
+    const mesh = createEnemyShipMesh(shipType)
+    mesh.position.set(enemy.x, 0, enemy.z)
+    scene.add(mesh)
+    enemyShipMeshes.push(mesh)
+  })
   
-  // Main mast
-  const mastGeometry = new THREE.CylinderGeometry(0.25, 0.25, 12)
-  const mastMaterial = new THREE.MeshPhongMaterial({ color: 0x654321 })
-  const mast = new THREE.Mesh(mastGeometry, mastMaterial)
-  mast.position.y = 8
-  enemyShipMesh.add(mast)
+  showMessage('⚔️ 3 Enemy ships approaching!', 3000)
+}
+
+function createEnemyShipMesh(shipType) {
+  const mesh = new THREE.Group()
+  const size = shipType.size
   
-  // Fore mast
-  const foreMastGeometry = new THREE.CylinderGeometry(0.2, 0.2, 7)
-  const foreMast = new THREE.Mesh(foreMastGeometry, mastMaterial)
-  foreMast.position.set(0, 6, -3)
-  enemyShipMesh.add(foreMast)
+  // Hull - different colors per type
+  const hullGeom = new THREE.BoxGeometry(3 * size, 2 * size, 10 * size)
+  const hullMat = new THREE.MeshPhongMaterial({ color: shipType.color })
+  const hull = new THREE.Mesh(hullGeom, hullMat)
+  hull.position.y = 1.5 * size
+  mesh.add(hull)
   
-  // White sails (navy ships have white sails)
-  const sailGeometry = new THREE.PlaneGeometry(6, 8, 10, 14)
-  const sailMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
-  const sail = new THREE.Mesh(sailGeometry, sailMaterial)
-  sail.position.set(0, 9, 0)
+  // Mast
+  const mastGeom = new THREE.CylinderGeometry(0.2 * size, 0.25 * size, 10 * size, 8)
+  const mastMat = new THREE.MeshPhongMaterial({ color: 0x654321 })
+  const mast = new THREE.Mesh(mastGeom, mastMat)
+  mast.position.y = 7 * size
+  mesh.add(mast)
+  
+  // Sails
+  const sailGeom = new THREE.PlaneGeometry(5 * size, 7 * size, 8, 10)
+  const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.9 })
+  const sail = new THREE.Mesh(sailGeom, sailMat)
+  sail.position.set(0, 8 * size, 0)
   sail.rotation.y = Math.PI / 2
   sail.userData.isSail = true
-  sail.userData.originalVertices = sailGeometry.attributes.position.array.slice()
-  enemyShipMesh.add(sail)
+  sail.userData.originalVertices = sailGeom.attributes.position.array.slice()
+  mesh.add(sail)
+  mesh.userData.sails = [sail]
   
-  // Fore sail
-  const foreSailGeometry = new THREE.PlaneGeometry(3.5, 4.5, 6, 8)
-  const foreSailMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
-  const foreSail = new THREE.Mesh(foreSailGeometry, foreSailMaterial)
-  foreSail.position.set(0, 6, -2.5)
-  foreSail.rotation.y = Math.PI / 2
-  foreSail.userData.isSail = true
-  foreSail.userData.originalVertices = foreSailGeometry.attributes.position.array.slice()
-  enemyShipMesh.add(foreSail)
-  
-  // Store sails for animation
-  enemyShipMesh.userData.sails = [sail, foreSail]
-  
-  // Flag - British Union Jack
-  const flagGeometry = new THREE.PlaneGeometry(2, 1.5)
-  const flagMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff })
-  const flag = new THREE.Mesh(flagGeometry, flagMaterial)
-  flag.position.set(0, 14, 0)
+  // Flag based on type
+  const flagGeom = new THREE.PlaneGeometry(1.5 * size, 1 * size)
+  let flagColor = 0x0000ff
+  if (shipType === SHIP_TYPES.RAMMER) flagColor = 0xff0000 // Red for aggressive
+  else if (shipType === SHIP_TYPES.BIG) flagColor = 0xffff00 // Gold for big
+  const flagMat = new THREE.MeshBasicMaterial({ color: flagColor })
+  const flag = new THREE.Mesh(flagGeom, flagMat)
+  flag.position.set(0, 12 * size, 0)
   flag.rotation.y = Math.PI / 2
-  enemyShipMesh.add(flag)
+  mesh.add(flag)
   
-  enemyShipMesh.position.set(enemyShip.value.x, 0, enemyShip.value.z)
-  scene.add(enemyShipMesh)
+  // Rammer has a spike
+  if (shipType === SHIP_TYPES.RAMMER) {
+    const spikeGeom = new THREE.ConeGeometry(0.3 * size, 3 * size, 6)
+    const spikeMat = new THREE.MeshPhongMaterial({ color: 0x888888, metalness: 0.8 })
+    const spike = new THREE.Mesh(spikeGeom, spikeMat)
+    spike.rotation.x = -Math.PI / 2
+    spike.position.set(0, 1 * size, 6 * size)
+    mesh.add(spike)
+  }
+  
+  return mesh
 }
 
 function createKraken() {
@@ -802,35 +864,61 @@ function fireCannon(side) {
 }
 
 function fireEnemyCannon() {
-  if (enemyShip.value.hp <= 0) return
+  // Legacy function - keep for compatibility
+  if (enemyShips.value.length > 0 && enemyShips.value[0].hp > 0) {
+    fireEnemyCannonMulti(enemyShips.value[0], SHIP_TYPES[enemyShips.value[0].type])
+  }
+}
+
+function fireEnemyCannonMulti(enemy, shipType) {
+  const angle = enemy.angle
   
-  const angle = enemyShip.value.angle
-  
-  // Fire from both sides
-  for (let side = -1; side <= 1; side += 2) {
-    const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
-    const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
-    const ball = new THREE.Mesh(ballGeometry, ballMaterial)
+  if (shipType === SHIP_TYPES.NORMAL) {
+    // Normal ship fires 1 cannon straight ahead
+    const ballGeom = new THREE.SphereGeometry(0.35, 8, 8)
+    const ballMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
+    const ball = new THREE.Mesh(ballGeom, ballMat)
+    ball.position.set(enemy.x, 2, enemy.z)
     
-    const sideOffset = side * 2
-    ball.position.set(
-      enemyShip.value.x + Math.sin(angle) * sideOffset,
-      2,
-      enemyShip.value.z + Math.cos(angle) * sideOffset
-    )
-    
-    const speed = 30
+    const speed = 35
     cannonballs.push({
       mesh: ball,
-      vx: Math.sin(angle + side * Math.PI / 2) * speed,
-      vz: Math.cos(angle + side * Math.PI / 2) * speed,
+      vx: Math.sin(angle) * speed,
+      vz: Math.cos(angle) * speed,
       life: 3,
       isEnemy: true,
-      spawnTime: Date.now()
+      spawnTime: Date.now(),
+      damage: shipType.cannonDamage
     })
-    
     scene.add(ball)
+  } else if (shipType === SHIP_TYPES.BIG) {
+    // Big ship fires 2 cannons from each side (broadside)
+    for (let side = -1; side <= 1; side += 2) {
+      for (let offset = -1; offset <= 1; offset += 2) {
+        const ballGeom = new THREE.SphereGeometry(0.4, 8, 8)
+        const ballMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
+        const ball = new THREE.Mesh(ballGeom, ballMat)
+        ball.position.set(
+          enemy.x + Math.sin(angle + side * Math.PI / 2) * offset * 2,
+          2,
+          enemy.z + Math.cos(angle + side * Math.PI / 2) * offset * 2
+        )
+        
+        const speed = 30
+        cannonballs.push({
+          mesh: ball,
+          vx: Math.sin(angle + side * Math.PI / 2) * speed,
+          vz: Math.cos(angle + side * Math.PI / 2) * speed,
+          life: 3,
+          isEnemy: true,
+          spawnTime: Date.now(),
+          damage: shipType.cannonDamage
+        })
+        scene.add(ball)
+      }
+    }
   }
+  // Rammers don't shoot - they ram!
 }
 
 function updateCannonballs(dt) {
@@ -840,16 +928,24 @@ function updateCannonballs(dt) {
     ball.mesh.position.z += ball.vz * dt
     ball.life -= dt
     
-    // Check collision with enemy
-    if (enemyShip.value.hp > 0) {
-      const dx = ball.mesh.position.x - enemyShip.value.x
-      const dz = ball.mesh.position.z - enemyShip.value.z
-      if (Math.sqrt(dx * dx + dz * dz) < 8) {
-        enemyShip.value.hp -= 10
-        showMessage('💥 Hit enemy ship!')
-        scene.remove(ball.mesh)
-        cannonballs.splice(i, 1)
-        continue
+    // Check collision with enemies
+    if (ball.isPlayer) { // Only player cannons damage enemies
+      for (let eIndex = 0; eIndex < enemyShips.value.length; eIndex++) {
+        const enemy = enemyShips.value[eIndex]
+        if (enemy.hp <= 0) continue
+        
+        const dx = ball.mesh.position.x - enemy.x
+        const dz = ball.mesh.position.z - enemy.z
+        const shipType = SHIP_TYPES[enemy.type]
+        const hitDist = 6 * shipType.size
+        
+        if (Math.sqrt(dx * dx + dz * dz) < hitDist) {
+          enemy.hp -= 10
+          showMessage(`💥 Hit ${shipType.name}!`)
+          scene.remove(ball.mesh)
+          cannonballs.splice(i, 1)
+          break // Only hit one enemy
+        }
       }
     }
     
@@ -873,11 +969,12 @@ function updateCannonballs(dt) {
     // Check collision with player (from enemy cannons only - not your own!)
     // Add grace period so your own cannons don't hit you
     const age = (Date.now() - ball.spawnTime) / 1000
-    if (age > 0.3) {
+    if (age > 0.3 && ball.isEnemy) {
       const pdx = ball.mesh.position.x - playerPos.value.x
       const pdz = ball.mesh.position.z - playerPos.value.z
       if (Math.sqrt(pdx * pdx + pdz * pdz) < 3) {
-        hp.value -= 10
+        const damage = ball.damage || 10
+        hp.value -= damage
         showMessage('💥 You were hit!')
         scene.remove(ball.mesh)
         cannonballs.splice(i, 1)
@@ -1244,78 +1341,87 @@ function update(dt) {
     gameState.value = 'gameover'
   }
   
-  // Enemy ship AI - with obstacle avoidance and intelligence
-  if (enemyShip.value.hp > 0) {
+  // === MULTIPLE ENEMY SHIPS AI ===
+  enemyShips.value.forEach((enemy, index) => {
+    if (enemy.hp <= 0) return // Skip destroyed ships
+    
+    const mesh = enemyShipMeshes[index]
+    if (!mesh) return
+    
+    const shipType = SHIP_TYPES[enemy.type]
+    
     // Calculate direction to player
-    const dx = playerPos.value.x - enemyShip.value.x
-    const dz = playerPos.value.z - enemyShip.value.z
+    const dx = playerPos.value.x - enemy.x
+    const dz = playerPos.value.z - enemy.z
     const distToPlayer = Math.sqrt(dx * dx + dz * dz)
-    const targetAngle = Math.atan2(dx, dz)
+    let targetAngle = Math.atan2(dx, dz)
+    
+    // Different behavior based on ship type
+    if (enemy.type === 'RAMMER') {
+      // Rammers charge directly at player
+      targetAngle = Math.atan2(dx, dz)
+    } else if (enemy.type === 'NORMAL') {
+      // Normal ships try to get in front for broadside
+      targetAngle = Math.atan2(dx, dz) + Math.PI // Stay behind player
+    } else if (enemy.type === 'BIG') {
+      // Big ships move slowly, try to flank
+      const flankAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.5 : -0.5)
+      targetAngle = flankAngle
+    }
     
     // Check for obstacles ahead
-    const lookAheadX = enemyShip.value.x + Math.sin(enemyShip.value.angle) * 15
-    const lookAheadZ = enemyShip.value.z + Math.cos(enemyShip.value.angle) * 15
+    const lookAheadX = enemy.x + Math.sin(enemy.angle) * 15
+    const lookAheadZ = enemy.z + Math.cos(enemy.angle) * 15
     const obstacleAhead = checkObstacleCollision(lookAheadX, lookAheadZ, 5)
     
     let moveAngle = targetAngle
     
-    // If obstacle ahead, try to steer around it
     if (obstacleAhead) {
-      // Turn left or right to avoid
       const leftCheck = checkObstacleCollision(
-        enemyShip.value.x + Math.sin(enemyShip.value.angle + 0.5) * 10,
-        enemyShip.value.z + Math.cos(enemyShip.value.angle + 0.5) * 10,
-        5
+        enemy.x + Math.sin(enemy.angle + 0.5) * 10,
+        enemy.z + Math.cos(enemy.angle + 0.5) * 10, 5
       )
       const rightCheck = checkObstacleCollision(
-        enemyShip.value.x + Math.sin(enemyShip.value.angle - 0.5) * 10,
-        enemyShip.value.z + Math.cos(enemyShip.value.angle - 0.5) * 10,
-        5
+        enemy.x + Math.sin(enemy.angle - 0.5) * 10,
+        enemy.z + Math.cos(enemy.angle - 0.5) * 10, 5
       )
       
-      if (!leftCheck && rightCheck) {
-        moveAngle = enemyShip.value.angle + 0.8 * dt // Turn left
-      } else if (!rightCheck && leftCheck) {
-        moveAngle = enemyShip.value.angle - 0.8 * dt // Turn right
-      } else if (!leftCheck && !rightCheck) {
-        // Both clear, pick random
-        moveAngle = enemyShip.value.angle + (Math.random() > 0.5 ? 0.8 : -0.8) * dt
-      } else {
-        // Full reverse
-        moveAngle = enemyShip.value.angle + Math.PI
-      }
+      if (!leftCheck && rightCheck) moveAngle = enemy.angle + 0.8 * dt
+      else if (!rightCheck && leftCheck) moveAngle = enemy.angle - 0.8 * dt
+      else if (!leftCheck && !rightCheck) moveAngle = enemy.angle + (Math.random() > 0.5 ? 0.8 : -0.8) * dt
+      else moveAngle = enemy.angle + Math.PI
     }
     
     // Smoothly turn toward target
-    enemyShip.value.angle += (moveAngle - enemyShip.value.angle) * dt * 2
+    enemy.angle += (moveAngle - enemy.angle) * dt * 2
     
-    // Move at variable speed
-    const enemySpeed = obstacleAhead ? 3 : 6
-    enemyShip.value.x += Math.sin(enemyShip.value.angle) * enemySpeed * dt
-    enemyShip.value.z += Math.cos(enemyShip.value.angle) * enemySpeed * dt
+    // Move at speed based on type
+    const enemySpeed = obstacleAhead ? shipType.speed * 0.5 : shipType.speed
+    enemy.x += Math.sin(enemy.angle) * enemySpeed * dt
+    enemy.z += Math.cos(enemy.angle) * enemySpeed * dt
     
     // Enemy wake
     if (enemySpeed > 2 && Math.random() < 0.1) {
-      spawnWakeParticle(enemyShip.value.x, enemyShip.value.z, enemyShip.value.angle, true)
+      spawnWakeParticle(enemy.x, enemy.z, enemy.angle, true)
     }
     
     // Keep in bounds
     const maxDist = 550
-    if (Math.sqrt(enemyShip.value.x ** 2 + enemyShip.value.z ** 2) > maxDist) {
-      const angle = Math.atan2(enemyShip.value.x, enemyShip.value.z)
-      enemyShip.value.x = Math.sin(angle) * maxDist
-      enemyShip.value.z = Math.cos(angle) * maxDist
+    if (Math.sqrt(enemy.x ** 2 + enemy.z ** 2) > maxDist) {
+      const boundAngle = Math.atan2(enemy.x, enemy.z)
+      enemy.x = Math.sin(boundAngle) * maxDist
+      enemy.z = Math.cos(boundAngle) * maxDist
     }
     
     // Update mesh
-    enemyShipMesh.position.x = enemyShip.value.x
-    enemyShipMesh.position.z = enemyShip.value.z
-    enemyShipMesh.rotation.y = enemyShip.value.angle
+    mesh.position.x = enemy.x
+    mesh.position.z = enemy.z
+    mesh.rotation.y = enemy.angle
     
     // Animate enemy sails
-    if (enemyShipMesh.userData.sails) {
+    if (mesh.userData.sails) {
       const time = Date.now() * 0.001
-      enemyShipMesh.userData.sails.forEach((sail, index) => {
+      mesh.userData.sails.forEach((sail, sailIndex) => {
         if (!sail.userData.originalVertices) return
         const positions = sail.geometry.attributes.position
         const original = sail.userData.originalVertices
@@ -1324,7 +1430,7 @@ function update(dt) {
           const x = original[i * 3]
           const y = original[i * 3 + 1]
           const bulge = Math.abs(x) / 3 * windStrength
-          const wave = Math.sin(time * 2.5 + y * 0.5 + index) * 0.25 * windStrength
+          const wave = Math.sin(time * 2.5 + y * 0.5 + sailIndex) * 0.25 * windStrength
           positions.array[i * 3 + 2] = bulge + wave
         }
         positions.needsUpdate = true
@@ -1332,29 +1438,47 @@ function update(dt) {
     }
     
     // Collision with player
-    const edx = playerPos.value.x - enemyShip.value.x
-    const edz = playerPos.value.z - enemyShip.value.z
+    const edx = playerPos.value.x - enemy.x
+    const edz = playerPos.value.z - enemy.z
     const enemyDist = Math.sqrt(edx * edx + edz * edz)
+    const collisionDist = 4 * shipType.size
     
-    if (enemyDist < 6) {
-      hp.value -= 10 * dt
+    if (enemyDist < collisionDist + 3) {
+      // Rammers deal 2x damage but take little damage
+      const damage = enemy.type === 'RAMMER' ? shipType.rammingDamage * 2 : shipType.rammingDamage
+      hp.value -= damage * dt
+      
+      // Rammers are harder to damage from collision
+      const enemyDamage = enemy.type === 'RAMMER' ? 2 : 5
+      enemy.hp -= enemyDamage
+      
       // Bounce back
-      enemyShip.value.x -= Math.sin(enemyShip.value.angle) * 2
-      enemyShip.value.z -= Math.cos(enemyShip.value.angle) * 2
-      enemyShip.value.hp -= 5 // Enemy also takes damage from collision
-      showMessage('⚔️ Collision with enemy!')
+      enemy.x -= Math.sin(enemy.angle) * 2
+      enemy.z -= Math.cos(enemy.angle) * 2
+      
+      const typeName = enemy.type === 'RAMMER' ? 'Ramming ship' : (enemy.type === 'BIG' ? 'Galleon' : 'Sloop')
+      showMessage(`⚔️ Collision with ${typeName}!`)
     }
     
-    // Enemy fires back occasionally
-    if (Math.random() < 0.02 && distToPlayer < 30) {
-      fireEnemyCannon()
+    // Enemy fires based on type
+    const now = Date.now()
+    const fireChance = enemy.type === 'BIG' ? 0.015 : (enemy.type === 'NORMAL' ? 0.02 : 0.005)
+    const fireRange = enemy.type === 'NORMAL' ? 25 : 35
+    
+    if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 2000) {
+      enemy.lastShot = now
+      fireEnemyCannonMulti(enemy, shipType)
     }
-  } else if (enemyShipMesh) {
-    // Sunk!
-    scene.remove(enemyShipMesh)
-    enemyShipMesh = null
-    gold.value += 100
-    showMessage('💰 Enemy ship sunk! +100 Gold')
+  })
+  
+  // Check if all enemies destroyed
+  const aliveEnemies = enemyShips.value.filter(e => e.hp > 0)
+  if (aliveEnemies.length === 0 && enemyShipMeshes.length > 0) {
+    // All enemies destroyed!
+    enemyShipMeshes.forEach(mesh => scene.remove(mesh))
+    enemyShipMeshes = []
+    gold.value += 200
+    showMessage('💰 All enemies destroyed! +200 Gold')
     
     // Spawn kraken after delay
     setTimeout(() => {
@@ -1415,6 +1539,61 @@ function update(dt) {
     }
   }
   updateWakeParticles(dt)
+  
+  // === UPDATE ENEMY INDICATORS ===
+  updateEnemyIndicators()
+}
+
+function updateEnemyIndicators() {
+  const indicators = []
+  const detectionRange = 400 // Range to show indicators
+  
+  // Check enemy ships
+  enemyShips.value.forEach(enemy => {
+    const dx = enemy.x - playerPos.value.x
+    const dz = enemy.z - playerPos.value.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    
+    if (dist < detectionRange && dist > 50) {
+      // Calculate angle to enemy
+      const angleToEnemy = Math.atan2(dx, dz) - playerAngle
+      
+      // Convert to screen position (simple approximation)
+      const screenX = 50 + Math.sin(angleToEnemy) * 40
+      const screenY = 50 - Math.cos(angleToEnemy) * 30
+      
+      indicators.push({
+        x: Math.max(10, Math.min(90, screenX)),
+        y: Math.max(10, Math.min(90, screenY)),
+        angle: -angleToEnemy,
+        icon: enemy.type === 'RAMMER' ? '⚔️' : (enemy.type === 'BIG' ? '🏴‍☠️' : '⛵'),
+        label: `${enemy.type} (${Math.round(dist)}m)`
+      })
+    }
+  })
+  
+  // Check kraken
+  if (krakenActive && kraken.value.hp > 0) {
+    const dx = kraken.value.x - playerPos.value.x
+    const dz = kraken.value.z - playerPos.value.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    
+    if (dist < detectionRange) {
+      const angleToKraken = Math.atan2(dx, dz) - playerAngle
+      const screenX = 50 + Math.sin(angleToKraken) * 40
+      const screenY = 50 - Math.cos(angleToKraken) * 30
+      
+      indicators.push({
+        x: Math.max(10, Math.min(90, screenX)),
+        y: Math.max(10, Math.min(90, screenY)),
+        angle: -angleToKraken,
+        icon: '🐙',
+        label: `KRAKEN (${Math.round(dist)}m)`
+      })
+    }
+  }
+  
+  enemyIndicators.value = indicators
 }
 
 // Wake particle functions
@@ -1497,7 +1676,12 @@ function startGame() {
   targetRotation = 0
   playerSpeed.value = 0
   
-  enemyShip.value = { x: 250, z: -250, hp: 100, angle: 0 }
+  // Clear old enemy references
+  enemyShips.value = []
+  enemyShipMeshes.forEach(mesh => scene.remove(mesh))
+  enemyShipMeshes = []
+  
+  // Spawn new enemies
   spawnEnemyShip()
   
   if (krakenMesh) {
@@ -1553,6 +1737,39 @@ canvas {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* Enemy indicators */
+.indicators {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.indicator {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.indicator-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(1px 1px 2px #000);
+}
+
+.indicator-label {
+  font-size: 0.7rem;
+  color: #fff;
+  background: rgba(0,0,0,0.5);
+  padding: 2px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
 .hud {
