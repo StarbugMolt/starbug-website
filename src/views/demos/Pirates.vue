@@ -1822,7 +1822,7 @@ function updateWindParticles(dt) {
 
 // Check if a position would collide with obstacles
 function checkObstacleCollision(x, z, radius) {
-  // Check islands
+  // Check static islands
   for (const island of islands) {
     const dx = x - island.x
     const dz = z - island.z
@@ -1831,7 +1831,16 @@ function checkObstacleCollision(x, z, radius) {
     }
   }
   
-  // Check rocks
+  // Check procedural islands
+  for (const island of worldObjects.islands) {
+    const dx = x - island.x
+    const dz = z - island.z
+    if (Math.sqrt(dx * dx + dz * dz) < island.radius + radius) {
+      return true
+    }
+  }
+  
+  // Check static rocks
   for (const rock of rocks) {
     const dx = x - rock.x
     const dz = z - rock.z
@@ -1840,7 +1849,68 @@ function checkObstacleCollision(x, z, radius) {
     }
   }
   
+  // Check procedural rocks
+  for (const rock of worldObjects.rocks) {
+    const dx = x - rock.x
+    const dz = z - rock.z
+    if (Math.sqrt(dx * dx + dz * dz) < rock.radius + radius) {
+      return true
+    }
+  }
+  
   return false
+}
+
+// Line of sight check - returns true if no obstacles between two points
+function hasLineOfSight(x1, z1, x2, z2) {
+  const dx = x2 - x1
+  const dz = z2 - z1
+  const dist = Math.sqrt(dx * dx + dz * dz)
+  const steps = Math.ceil(dist / 5) // Check every 5 units
+  
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps
+    const checkX = x1 + dx * t
+    const checkZ = z1 + dz * t
+    
+    // Check static islands (legacy)
+    for (const island of islands) {
+      const idx = checkX - island.x
+      const idz = checkZ - island.z
+      if (Math.sqrt(idx * idx + idz * idz) < island.radius) {
+        return false
+      }
+    }
+    
+    // Check procedural islands
+    for (const island of worldObjects.islands) {
+      const idx = checkX - island.x
+      const idz = checkZ - island.z
+      if (Math.sqrt(idx * idx + idz * idz) < island.radius) {
+        return false
+      }
+    }
+    
+    // Check static rocks
+    for (const rock of rocks) {
+      const rdx = checkX - rock.x
+      const rdz = checkZ - rock.z
+      if (Math.sqrt(rdx * rdx + rdz * rdz) < rock.radius + 2) {
+        return false
+      }
+    }
+    
+    // Check procedural rocks
+    for (const rock of worldObjects.rocks) {
+      const rdx = checkX - rock.x
+      const rdz = checkZ - rock.z
+      if (Math.sqrt(rdx * rdx + rdz * rdz) < rock.radius + 2) {
+        return false
+      }
+    }
+  }
+  
+  return true
 }
 
 function update(dt) {
@@ -2100,14 +2170,17 @@ function update(dt) {
       showMessage(`⚔️ Collision with ${typeName}!`)
     }
     
-    // Enemy fires based on type
+    // Enemy fires based on type and line of sight
     const now = Date.now()
     const fireChance = enemy.type === 'BIG' ? 0.015 : (enemy.type === 'NORMAL' ? 0.02 : 0.005)
     const fireRange = enemy.type === 'NORMAL' ? 25 : 35
     
     if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 2000) {
-      enemy.lastShot = now
-      fireEnemyCannonMulti(enemy, shipType, index)
+      // Check line of sight to player
+      if (hasLineOfSight(enemy.x, enemy.z, playerPos.value.x, playerPos.value.z)) {
+        enemy.lastShot = now
+        fireEnemyCannonMulti(enemy, shipType, index)
+      }
     }
   })
   
