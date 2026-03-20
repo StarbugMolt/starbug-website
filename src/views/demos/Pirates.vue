@@ -149,6 +149,10 @@ let frameCount = 0 // For throttling updates
 let islands = []
 let rocks = []
 
+// Procedural world generation
+let spawnedChunks = new Set() // Track spawned areas "x,z"
+let worldObjects = { islands: [], rocks: [], ships: [] }
+
 // Ocean
 let ocean
 
@@ -1901,9 +1905,7 @@ function animateSails(dt) {
 let windParticles = []
 const maxWindParticles = 100
 
-// Procedural world generation
-const spawnedChunks = new Set() // Track spawned areas "x,z"
-const worldObjects = { islands: [], rocks: [], ships: [] }
+// Chunk size
 const CHUNK_SIZE = 200 // Each chunk is 200x200 units
 
 // Performance: Distance tiers (see PERFORMANCE.md)
