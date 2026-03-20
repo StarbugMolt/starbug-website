@@ -616,7 +616,7 @@ function createPlayerShip() {
     cannon.position.set(-1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
     // Angle cannons: front one forward, back one backward
-    cannon.rotation.y = i * (25 * Math.PI / 180) // 25 degrees cone
+    cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
     playerShip.add(cannon)
   }
   
@@ -626,7 +626,7 @@ function createPlayerShip() {
     cannon.position.set(1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
     // Angle cannons: front one forward, back one backward
-    cannon.rotation.y = i * (25 * Math.PI / 180) // 25 degrees cone
+    cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
     playerShip.add(cannon)
   }
 
@@ -972,7 +972,7 @@ function fireCannon(side) {
     for (let i = 0; i < sidePositions.length; i++) {
       const zOffset = sidePositions[i]
       // Calculate cone angle: front cannon fires forward, back fires backward
-      const coneAngle = (i - 1) * (25 * Math.PI / 180) // -25°, 0°, +25°
+      const coneAngle = (i - 1) * (10 * Math.PI / 180) // -10°, 0°, +10°
       
       const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
       const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
