@@ -999,9 +999,9 @@ function checkProceduralSpawns() {
   const px = Math.floor(playerPos.value.x / CHUNK_SIZE)
   const pz = Math.floor(playerPos.value.z / CHUNK_SIZE)
   
-  // Check 3x3 grid of chunks around player
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dz = -1; dz <= 1; dz++) {
+  // Check 9x9 grid of chunks around player (player always in center)
+  for (let dx = -4; dx <= 4; dx++) {
+    for (let dz = -4; dz <= 4; dz++) {
       const cx = px + dx
       const cz = pz + dz
       const key = `${cx},${cz}`
@@ -1013,8 +1013,45 @@ function checkProceduralSpawns() {
     }
   }
   
-  // Cleanup distant chunks
+  // Cleanup distant chunks (beyond 9x9)
   cleanupDistantChunks()
+  
+  // Ensure kraken is always in loaded chunk
+  if (krakenActive && kraken.value) {
+    // Check if kraken is in loaded chunk
+    const kx = Math.floor(kraken.value.x / CHUNK_SIZE)
+    const kz = Math.floor(kraken.value.z / CHUNK_SIZE)
+    const dist = Math.sqrt((kx - px) ** 2 + (kz - pz) ** 2)
+    
+    // If kraken too far or unloaded, spawn new one
+    if (dist > 5) {
+      // Find a chunk not too close to player
+      let spawnDist = 6
+      let newCX = px, newCZ = pz
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const angle = Math.random() * Math.PI * 2
+        const testDist = 5 + Math.random() * 3
+        newCX = px + Math.floor(Math.cos(angle) * testDist)
+        newCZ = pz + Math.floor(Math.sin(angle) * testDist)
+        if (!spawnedChunks.has(`${newCX},${newCZ}`)) {
+          spawnDist = testDist
+          break
+        }
+      }
+      
+      // Respawn kraken
+      const worldX = newCX * CHUNK_SIZE + CHUNK_SIZE / 2
+      const worldZ = newCZ * CHUNK_SIZE + CHUNK_SIZE / 2
+      kraken.value.x = worldX + (Math.random() - 0.5) * 100
+      kraken.value.z = worldZ + (Math.random() - 0.5) * 100
+      if (krakenMesh) {
+        scene.remove(krakenMesh)
+        krakenMesh = null
+      }
+      createKraken()
+      showMessage('💀 A new Kraken approaches...', 3000)
+    }
+  }
 }
 
 function spawnChunk(cx, cz) {
@@ -1137,7 +1174,9 @@ function spawnRandomShip(x, z) {
 function cleanupDistantChunks() {
   const px = playerPos.value.x
   const pz = playerPos.value.z
-  const maxDist = CHUNK_SIZE * 3
+  
+  // Only cleanup objects beyond 5 chunks (keep more loaded)
+  const maxDist = CHUNK_SIZE * 5
   
   // Clean islands
   for (let i = worldObjects.islands.length - 1; i >= 0; i--) {
@@ -1161,14 +1200,14 @@ function cleanupDistantChunks() {
     }
   }
   
-  // Clean chunks
+  // Clean chunk references beyond 6 chunks
   for (const key of spawnedChunks) {
     const [cx, cz] = key.split(',').map(Number)
     const wx = cx * CHUNK_SIZE + CHUNK_SIZE / 2
     const wz = cz * CHUNK_SIZE + CHUNK_SIZE / 2
     const dx = wx - px
     const dz = wz - pz
-    if (Math.sqrt(dx*dx + dz*dz) > maxDist * 1.5) {
+    if (Math.sqrt(dx*dx + dz*dz) > CHUNK_SIZE * 6) {
       spawnedChunks.delete(key)
     }
   }
