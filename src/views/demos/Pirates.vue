@@ -1914,7 +1914,8 @@ function update(dt) {
     }
     
     // === WHIRLPOOL - Pull player if too close ===
-    if (dist < 60) {
+    // Whirlpool zone matches visual (about 25 units)
+    if (dist < 25) {
       // Check wind direction relative to player heading
       // Positive = wind behind (tailwind), Negative = headwind
       let windAlignment = Math.cos(windAngle - playerAngle)
@@ -1925,8 +1926,8 @@ function update(dt) {
         pullModifier = -0.5 // Push OUT of whirlpool
       }
       
-      // Stronger pull when closer
-      const pullStrength = (1 - dist / 60) * 2 * pullModifier // Max pull speed of 2
+      // Stronger pull when closer (within visual circle)
+      const pullStrength = (1 - dist / 25) * 2 * pullModifier // Max pull speed of 2
       if (pullStrength !== 0) {
         playerPos.value.x += (kraken.value.x - playerPos.value.x) / dist * pullStrength * dt
         playerPos.value.z += (kraken.value.z - playerPos.value.z) / dist * pullStrength * dt
@@ -1991,7 +1992,7 @@ function update(dt) {
         tent.rotation.x = Math.PI / 2 - 0.3 + waveAmount
         
         // Check if should trigger smash attack
-        // Player must be close (within 25 units) and in front of this tentacle
+        // Player must be close (within 20 units of kraken) and in front of this tentacle
         if (dist < 25 && !anySmashing && tent.userData.smashCooldown <= 0) {
           const angleToPlayer = Math.atan2(dx, dz)
           let angleDiff = angleToPlayer - tent.userData.angle
@@ -2015,7 +2016,7 @@ function update(dt) {
     if (krakenMesh.userData.whirlpool) {
       krakenMesh.userData.whirlpool.rotation.z += dt * 0.5
       // Whirlpool opacity based on distance
-      const whirlpoolOpacity = dist < 60 ? 0.3 + (1 - dist / 60) * 0.4 : 0.15
+      const whirlpoolOpacity = dist < 25 ? 0.4 + (1 - dist / 25) * 0.3 : 0.15
       krakenMesh.userData.whirlpool.material.opacity = whirlpoolOpacity
     }
     
@@ -2038,7 +2039,7 @@ function update(dt) {
         const dzT = playerPos.value.z - tentZ
         const distT = Math.sqrt(dxT * dxT + dzT * dzT)
         
-        if (distT < 10) {
+        if (distT < 8) {
           hp.value -= 30 * dt
           showMessage('💀 TENTACLE SMASH!')
         }
