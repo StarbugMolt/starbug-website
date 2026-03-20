@@ -115,9 +115,9 @@ let enemyShipMeshes = [] // Array of meshes
 
 // Enemy ship types
 const SHIP_TYPES = {
-  RAMMER: { name: 'Rammer', hp: 150, speed: 8, rammingDamage: 20, cannonDamage: 5, color: 0x333333, size: 1.2 },
-  NORMAL: { name: 'Sloop', hp: 80, speed: 6, rammingDamage: 10, cannonDamage: 10, color: 0x8B0000, size: 1.0 },
-  BIG: { name: 'Galleon', hp: 200, speed: 4, rammingDamage: 10, cannonDamage: 15, color: 0x000080, size: 1.8 }
+  RAMMER: { name: 'Rammer', hp: 150, speed: 10, turnSpeed: 0.5, rammingDamage: 20, cannonDamage: 5, color: 0x333333, size: 1.2 },
+  NORMAL: { name: 'Sloop', hp: 80, speed: 6, turnSpeed: 2.0, rammingDamage: 10, cannonDamage: 10, color: 0x8B0000, size: 1.0 },
+  BIG: { name: 'Galleon', hp: 200, speed: 4, turnSpeed: 1.0, rammingDamage: 10, cannonDamage: 15, color: 0x000080, size: 1.8 }
 }
 
 // Kraken
@@ -866,11 +866,11 @@ function fireCannon(side) {
 function fireEnemyCannon() {
   // Legacy function - keep for compatibility
   if (enemyShips.value.length > 0 && enemyShips.value[0].hp > 0) {
-    fireEnemyCannonMulti(enemyShips.value[0], SHIP_TYPES[enemyShips.value[0].type])
+    fireEnemyCannonMulti(enemyShips.value[0], SHIP_TYPES[enemyShips.value[0].type], 0)
   }
 }
 
-function fireEnemyCannonMulti(enemy, shipType) {
+function fireEnemyCannonMulti(enemy, shipType, enemyIndex) {
   const angle = enemy.angle
   
   if (shipType === SHIP_TYPES.NORMAL) {
@@ -888,7 +888,8 @@ function fireEnemyCannonMulti(enemy, shipType) {
       life: 3,
       isEnemy: true,
       spawnTime: Date.now(),
-      damage: shipType.cannonDamage
+      damage: shipType.cannonDamage,
+      sourceIndex: enemyIndex
     })
     scene.add(ball)
   } else if (shipType === SHIP_TYPES.BIG) {
@@ -912,7 +913,8 @@ function fireEnemyCannonMulti(enemy, shipType) {
           life: 3,
           isEnemy: true,
           spawnTime: Date.now(),
-          damage: shipType.cannonDamage
+          damage: shipType.cannonDamage,
+          sourceIndex: enemyIndex
         })
         scene.add(ball)
       }
@@ -928,11 +930,14 @@ function updateCannonballs(dt) {
     ball.mesh.position.z += ball.vz * dt
     ball.life -= dt
     
-    // Check collision with enemies
-    if (ball.isPlayer) { // Only player cannons damage enemies
+    // Check collision with enemies (both player AND enemy cannons can damage enemies)
+    if (ball.isPlayer || ball.isEnemy) { 
       for (let eIndex = 0; eIndex < enemyShips.value.length; eIndex++) {
         const enemy = enemyShips.value[eIndex]
         if (enemy.hp <= 0) continue
+        
+        // Don't hit yourself (for enemy cannons)
+        if (ball.isEnemy && ball.sourceIndex === eIndex) continue
         
         const dx = ball.mesh.position.x - enemy.x
         const dz = ball.mesh.position.z - enemy.z
@@ -940,8 +945,15 @@ function updateCannonballs(dt) {
         const hitDist = 6 * shipType.size
         
         if (Math.sqrt(dx * dx + dz * dz) < hitDist) {
-          enemy.hp -= 10
-          showMessage(`💥 Hit ${shipType.name}!`)
+          const damage = ball.damage || 10
+          enemy.hp -= damage
+          
+          if (ball.isPlayer) {
+            showMessage(`💥 Hit ${shipType.name}!`)
+          } else {
+            showMessage(`💥 Enemy fire hit ${shipType.name}!`)
+          }
+          
           scene.remove(ball.mesh)
           cannonballs.splice(i, 1)
           break // Only hit one enemy
@@ -1393,7 +1405,7 @@ function update(dt) {
     }
     
     // Smoothly turn toward target
-    enemy.angle += (moveAngle - enemy.angle) * dt * 2
+    enemy.angle += (moveAngle - enemy.angle) * dt * shipType.turnSpeed
     
     // Move at speed based on type
     const enemySpeed = obstacleAhead ? shipType.speed * 0.5 : shipType.speed
@@ -1467,7 +1479,74 @@ function update(dt) {
     
     if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 2000) {
       enemy.lastShot = now
-      fireEnemyCannonMulti(enemy, shipType)
+      fireEnemyCannonMulti(enemy, shipType, index)
+    }
+  })
+  
+  // === ENEMY-ENEMY COLLISION ===
+  for (let i = 0; i < enemyShips.value.length; i++) {
+    const e1 = enemyShips.value[i]
+    if (e1.hp <= 0) continue
+    const t1 = SHIP_TYPES[e1.type]
+    
+    for (let j = i + 1; j < enemyShips.value.length; j++) {
+      const e2 = enemyShips.value[j]
+      if (e2.hp <= 0) continue
+      const t2 = SHIP_TYPES[e2.type]
+      
+      const dx = e1.x - e2.x
+      const dz = e1.z - e2.z
+      const dist = Math.sqrt(dx * dx + dz * dz)
+      const collisionDist = (4 * t1.size) + (4 * t2.size)
+      
+      if (dist < collisionDist) {
+        // Both take damage
+        e1.hp -= 5
+        e2.hp -= 5
+        
+        // Bounce apart
+        const angle = Math.atan2(dx, dz)
+        e1.x += Math.sin(angle) * 3
+        e1.z += Math.cos(angle) * 3
+        e2.x -= Math.sin(angle) * 3
+        e2.z -= Math.cos(angle) * 3
+        
+        showMessage('💥 Enemy ships collided!')
+      }
+    }
+  }
+  
+  // === ENEMY OBSTACLE COLLISION (rocks and islands) ===
+  enemyShips.value.forEach((enemy) => {
+    if (enemy.hp <= 0) return
+    const shipType = SHIP_TYPES[enemy.type]
+    
+    // Check islands
+    for (const island of islands) {
+      const dx = enemy.x - island.x
+      const dz = enemy.z - island.z
+      if (Math.sqrt(dx * dx + dz * dz) < island.radius + 5 * shipType.size) {
+        enemy.hp -= 15
+        // Bounce away
+        const angle = Math.atan2(dx, dz)
+        enemy.x += Math.sin(angle) * 5
+        enemy.z += Math.cos(angle) * 5
+        showMessage(`💥 ${shipType.name} hit an island!`)
+      }
+    }
+    
+    // Check rocks
+    for (const rock of rocks) {
+      const dx = enemy.x - rock.x
+      const dz = enemy.z - rock.z
+      if (Math.sqrt(dx * dx + dz * dz) < rock.radius + 3 * shipType.size) {
+        enemy.hp -= 10
+        // Bounce away
+        const angle = Math.atan2(dx, dz)
+        enemy.x += Math.sin(angle) * 3
+        enemy.z += Math.cos(angle) * 3
+        showMessage(`💥 ${shipType.name} hit a rock!`)
+      }
     }
   })
   
