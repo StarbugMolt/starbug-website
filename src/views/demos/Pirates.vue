@@ -945,9 +945,13 @@ function checkProceduralSpawns() {
   const px = Math.floor(playerPos.value.x / CHUNK_SIZE)
   const pz = Math.floor(playerPos.value.z / CHUNK_SIZE)
   
-  // Check 9x9 grid of chunks around player (player always in center)
-  for (let dx = -4; dx <= 4; dx++) {
-    for (let dz = -4; dz <= 4; dz++) {
+  // Only check immediate chunks (3x3) on first spawn to avoid massive initial load
+  // Expand to 9x9 over time
+  const chunkRadius = spawnedChunks.size < 10 ? 1 : (spawnedChunks.size < 30 ? 2 : 4)
+  
+  // Check chunk grid around player
+  for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
+    for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
       const cx = px + dx
       const cz = pz + dz
       const key = `${cx},${cz}`
@@ -1004,6 +1008,9 @@ function spawnChunk(cx, cz) {
   const worldX = cx * CHUNK_SIZE + CHUNK_SIZE / 2
   const worldZ = cz * CHUNK_SIZE + CHUNK_SIZE / 2
   
+  // Skip ships in starting chunk (0,0) - spawnEnemyShip handles initial enemies
+  const isStartingChunk = (cx === 0 && cz === 0)
+  
   // Spawn islands (1-3 per chunk)
   const numIslands = 1 + Math.floor(Math.random() * 3)
   for (let i = 0; i < numIslands; i++) {
@@ -1024,14 +1031,16 @@ function spawnChunk(cx, cz) {
     spawnRock(rx, rz)
   }
   
-  // Spawn random ships (0-3 ships per chunk)
-  const numShips = Math.floor(Math.random() * 4)
-  for (let s = 0; s < numShips; s++) {
+  // Spawn random ships (0-3 ships per chunk) - skip starting chunk
+  if (!isStartingChunk) {
+    const numShips = Math.floor(Math.random() * 4)
+    for (let s = 0; s < numShips; s++) {
     const angle = Math.random() * Math.PI * 2
     const dist = 30 + Math.random() * (CHUNK_SIZE / 2.5)
     const sx = worldX + Math.cos(angle) * dist
     const sz = worldZ + Math.sin(angle) * dist
     spawnRandomShip(sx, sz)
+    }
   }
 }
 
