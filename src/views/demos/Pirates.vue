@@ -194,8 +194,7 @@ function init() {
   // Player ship
   createPlayerShip()
 
-  // Islands
-  createIslands()
+  // Islands generated procedurally now
 
   // Initial enemy
   spawnEnemyShip()
@@ -995,6 +994,186 @@ function spawnTreasure(x, z) {
   showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
 }
 
+// Procedural world generation
+function checkProceduralSpawns() {
+  const px = Math.floor(playerPos.value.x / CHUNK_SIZE)
+  const pz = Math.floor(playerPos.value.z / CHUNK_SIZE)
+  
+  // Check 3x3 grid of chunks around player
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dz = -1; dz <= 1; dz++) {
+      const cx = px + dx
+      const cz = pz + dz
+      const key = `${cx},${cz}`
+      
+      if (!spawnedChunks.has(key)) {
+        spawnChunk(cx, cz)
+        spawnedChunks.add(key)
+      }
+    }
+  }
+  
+  // Cleanup distant chunks
+  cleanupDistantChunks()
+}
+
+function spawnChunk(cx, cz) {
+  const worldX = cx * CHUNK_SIZE + CHUNK_SIZE / 2
+  const worldZ = cz * CHUNK_SIZE + CHUNK_SIZE / 2
+  
+  // Spawn islands (1-3 per chunk)
+  const numIslands = 1 + Math.floor(Math.random() * 3)
+  for (let i = 0; i < numIslands; i++) {
+    const angle = Math.random() * Math.PI * 2
+    const dist = Math.random() * (CHUNK_SIZE / 2 - 30)
+    const ix = worldX + Math.cos(angle) * dist
+    const iz = worldZ + Math.sin(angle) * dist
+    spawnIsland(ix, iz)
+  }
+  
+  // Spawn rocks (3-6 per chunk)
+  const numRocks = 3 + Math.floor(Math.random() * 4)
+  for (let i = 0; i < numRocks; i++) {
+    const angle = Math.random() * Math.PI * 2
+    const dist = Math.random() * (CHUNK_SIZE / 2 - 20)
+    const rx = worldX + Math.cos(angle) * dist
+    const rz = worldZ + Math.sin(angle) * dist
+    spawnRock(rx, rz)
+  }
+  
+  // Spawn random ships (30% chance per chunk)
+  if (Math.random() < 0.3) {
+    const angle = Math.random() * Math.PI * 2
+    const dist = 50 + Math.random() * (CHUNK_SIZE / 3)
+    const sx = worldX + Math.cos(angle) * dist
+    const sz = worldZ + Math.sin(angle) * dist
+    spawnRandomShip(sx, sz)
+  }
+}
+
+function spawnIsland(x, z) {
+  const islandGroup = new THREE.Group()
+  
+  // Sand
+  const sandGeom = new THREE.ConeGeometry(15 + Math.random() * 10, 8, 8)
+  const sandMat = new THREE.MeshPhongMaterial({ color: 0xF4A460 })
+  const sand = new THREE.Mesh(sandGeom, sandMat)
+  sand.position.y = 2
+  islandGroup.add(sand)
+  
+  // Palm tree
+  const trunkGeom = new THREE.CylinderGeometry(0.3, 0.4, 5)
+  const trunkMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
+  const trunk = new THREE.Mesh(trunkGeom, trunkMat)
+  trunk.position.y = 6
+  islandGroup.add(trunk)
+  
+  const leavesGeom = new THREE.ConeGeometry(2.5, 4, 8)
+  const leavesMat = new THREE.MeshPhongMaterial({ color: 0x228B22 })
+  const leaves = new THREE.Mesh(leavesGeom, leavesMat)
+  leaves.position.y = 9
+  islandGroup.add(leaves)
+  
+  // 30% chance of harbor
+  if (Math.random() < 0.3) {
+    // Harbor - small dock area
+    const dockGeom = new THREE.BoxGeometry(8, 0.3, 4)
+    const dockMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
+    const dock = new THREE.Mesh(dockGeom, dockMat)
+    dock.position.set(12, 0.2, 0)
+    dock.rotation.y = Math.random() * Math.PI
+    islandGroup.add(dock)
+    
+    // Dock posts
+    for (let p = 0; p < 4; p++) {
+      const postGeom = new THREE.CylinderGeometry(0.2, 0.2, 2)
+      const post = new THREE.Mesh(postGeom, dockMat)
+      post.position.set(8 + (p % 2) * 6, 1, Math.floor(p / 2) * 4 - 2)
+      islandGroup.add(post)
+    }
+    
+    islandGroup.userData.hasHarbor = true
+  }
+  
+  islandGroup.position.set(x, 0, z)
+  scene.add(islandGroup)
+  worldObjects.islands.push({ x, z, radius: 20, mesh: islandGroup })
+}
+
+function spawnRock(x, z) {
+  const rockGeom = new THREE.DodecahedronGeometry(2 + Math.random() * 3)
+  const rockMat = new THREE.MeshPhongMaterial({ color: 0x696969 })
+  const rock = new THREE.Mesh(rockGeom, rockMat)
+  rock.position.set(x, 0.5, z)
+  rock.rotation.set(Math.random(), Math.random(), Math.random())
+  scene.add(rock)
+  worldObjects.rocks.push({ x, z, radius: 3, mesh: rock })
+}
+
+function spawnRandomShip(x, z) {
+  const types = ['RAMMER', 'NORMAL', 'BIG']
+  const type = types[Math.floor(Math.random() * types.length)]
+  const shipType = SHIP_TYPES[type]
+  
+  const enemy = {
+    x, z,
+    hp: shipType.hp,
+    maxHp: shipType.hp,
+    angle: Math.random() * Math.PI * 2,
+    type,
+    lastShot: 0,
+    sinking: false,
+    sinkingTime: 0
+  }
+  
+  const mesh = createEnemyShipMesh(shipType)
+  mesh.position.set(x, 0, z)
+  scene.add(mesh)
+  
+  enemyShips.value.push(enemy)
+  enemyShipMeshes.push(mesh)
+}
+
+function cleanupDistantChunks() {
+  const px = playerPos.value.x
+  const pz = playerPos.value.z
+  const maxDist = CHUNK_SIZE * 3
+  
+  // Clean islands
+  for (let i = worldObjects.islands.length - 1; i >= 0; i--) {
+    const island = worldObjects.islands[i]
+    const dx = island.x - px
+    const dz = island.z - pz
+    if (Math.sqrt(dx*dx + dz*dz) > maxDist) {
+      scene.remove(island.mesh)
+      worldObjects.islands.splice(i, 1)
+    }
+  }
+  
+  // Clean rocks
+  for (let i = worldObjects.rocks.length - 1; i >= 0; i--) {
+    const rock = worldObjects.rocks[i]
+    const dx = rock.x - px
+    const dz = rock.z - pz
+    if (Math.sqrt(dx*dx + dz*dz) > maxDist) {
+      scene.remove(rock.mesh)
+      worldObjects.rocks.splice(i, 1)
+    }
+  }
+  
+  // Clean chunks
+  for (const key of spawnedChunks) {
+    const [cx, cz] = key.split(',').map(Number)
+    const wx = cx * CHUNK_SIZE + CHUNK_SIZE / 2
+    const wz = cz * CHUNK_SIZE + CHUNK_SIZE / 2
+    const dx = wx - px
+    const dz = wz - pz
+    if (Math.sqrt(dx*dx + dz*dz) > maxDist * 1.5) {
+      spawnedChunks.delete(key)
+    }
+  }
+}
+
 function updateTreasure(dt) {
   if (!treasure.value) return
   
@@ -1496,6 +1675,11 @@ function animateSails(dt) {
 let windParticles = []
 const maxWindParticles = 100
 
+// Procedural world generation
+const spawnedChunks = new Set() // Track spawned areas "x,z"
+const worldObjects = { islands: [], rocks: [], ships: [] }
+const CHUNK_SIZE = 200 // Each chunk is 200x200 units
+
 function createWindParticles() {
   for (let i = 0; i < maxWindParticles; i++) {
     // Each wind particle is a line (trail)
@@ -1688,14 +1872,8 @@ function update(dt) {
   playerPos.value.x += Math.sin(playerAngle) * playerSpeed.value * dt
   playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
   
-  // Boundary
-  const maxDist = 600
-  if (Math.sqrt(playerPos.value.x ** 2 + playerPos.value.z ** 2) > maxDist) {
-    const angle = Math.atan2(playerPos.value.x, playerPos.value.z)
-    playerPos.value.x = Math.sin(angle) * maxDist
-    playerPos.value.z = Math.cos(angle) * maxDist
-    showMessage('⚠️ Approaching edge of map!')
-  }
+  // Infinite world - no boundaries, but check for procedural spawns
+  checkProceduralSpawns()
   
   // Update ship mesh
   playerShip.position.x = playerPos.value.x
@@ -1833,13 +2011,7 @@ function update(dt) {
       spawnWakeParticle(enemy.x, enemy.z, enemy.angle, true)
     }
     
-    // Keep in bounds
-    const maxDist = 550
-    if (Math.sqrt(enemy.x ** 2 + enemy.z ** 2) > maxDist) {
-      const boundAngle = Math.atan2(enemy.x, enemy.z)
-      enemy.x = Math.sin(boundAngle) * maxDist
-      enemy.z = Math.cos(boundAngle) * maxDist
-    }
+    // Infinite world - no boundaries
     
     // Update mesh
     mesh.position.x = enemy.x
@@ -2358,6 +2530,13 @@ function startGame() {
   // Reset
   hp.value = 100
   gold.value = 0
+  
+  // Reset procedural world
+  spawnedChunks.clear()
+  worldObjects.islands.forEach(i => scene.remove(i.mesh))
+  worldObjects.rocks.forEach(r => scene.remove(r.mesh))
+  worldObjects.islands = []
+  worldObjects.rocks = []
   cannonCooldown.value = 0
   portCooldown.value = 0
   starboardCooldown.value = 0
