@@ -1115,7 +1115,7 @@ function spawnChunk(cx, cz) {
   // Spawn random ships (0-3 ships per chunk) - skip starting chunk
   // Spawn random ships (0-3 ships per chunk) - skip starting chunk
   if (!isStartingChunk) {
-    const numShips = Math.floor(Math.random() * 4)
+    const numShips = Math.random() < 0.3 ? 1 : 0 // 30% chance of 1 ship per chunk
     const chunkShips = []
     
     for (let s = 0; s < numShips; s++) {
