@@ -101,6 +101,11 @@ const playerPos = ref({ x: 0, z: 0 })
 let playerAngle = 0
 let targetRotation = 0
 
+// Anchor state
+let anchorDropped = false
+let anchorAnimating = false
+let anchorMesh = null
+
 // Camera - 0 = behind (navigation), 1 = top-down (fighting)
 let cameraMode = 0 // Start in behind view
 
@@ -199,6 +204,7 @@ function init() {
   window.addEventListener('contextmenu', onContextMenu)
   window.addEventListener('pointerlockchange', onPointerLockChange)
   window.addEventListener('wheel', onWheel)
+  window.addEventListener('keydown', onKeyDown)
 }
 
 function createOcean() {
@@ -610,7 +616,7 @@ function createPlayerShip() {
     cannon.position.set(-1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
     // Angle cannons: front one forward, back one backward
-    cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
+    cannon.rotation.y = i * (25 * Math.PI / 180) // 25 degrees cone
     playerShip.add(cannon)
   }
   
@@ -620,7 +626,7 @@ function createPlayerShip() {
     cannon.position.set(1.6, 1.8, i * 2)
     cannon.rotation.z = Math.PI / 2
     // Angle cannons: front one forward, back one backward
-    cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
+    cannon.rotation.y = i * (25 * Math.PI / 180) // 25 degrees cone
     playerShip.add(cannon)
   }
 
@@ -966,7 +972,7 @@ function fireCannon(side) {
     for (let i = 0; i < sidePositions.length; i++) {
       const zOffset = sidePositions[i]
       // Calculate cone angle: front cannon fires forward, back fires backward
-      const coneAngle = (i - 1) * (10 * Math.PI / 180) // -10°, 0°, +10°
+      const coneAngle = (i - 1) * (25 * Math.PI / 180) // -25°, 0°, +25°
       
       const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
       const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
@@ -1218,6 +1224,78 @@ function onWheel(e) {
   showMessage(`📷 ${modeNames[currentMode]} view`, 1500)
 }
 
+function onKeyDown(e) {
+  if (gameState.value !== 'playing') return
+  if (anchorAnimating) return
+  
+  // A key - toggle anchor
+  if (e.key === 'a' || e.key === 'A') {
+    anchorAnimating = true
+    
+    if (!anchorDropped) {
+      // Drop anchor
+      showMessage('⚓ Dropping anchor...', 1500)
+      
+      // Create anchor mesh if not exists
+      if (!anchorMesh) {
+        createAnchor()
+      }
+      
+      // Animate anchor dropping (1 second)
+      setTimeout(() => {
+        anchorDropped = true
+        anchorAnimating = false
+        playerSpeed.value = 0 // Stop forward momentum
+        showMessage('⚓ Anchor dropped!', 1500)
+      }, 1000)
+    } else {
+      // Raise anchor
+      showMessage('⚓ Raising anchor...', 1500)
+      
+      // Animate anchor raising (1 second)
+      setTimeout(() => {
+        anchorDropped = false
+        anchorAnimating = false
+        playerSpeed.value = 0.5 // Start with slow speed
+        showMessage('⚓ Anchor raised!', 1500)
+      }, 1000)
+    }
+  }
+}
+
+function createAnchor() {
+  // Simple anchor mesh
+  const anchorGroup = new THREE.Group()
+  
+  // Chain
+  const chainGeom = new THREE.CylinderGeometry(0.05, 0.05, 15, 6)
+  const chainMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
+  const chain = new THREE.Mesh(chainGeom, chainMat)
+  chain.position.y = -7.5
+  anchorGroup.add(chain)
+  
+  // Anchor body
+  const anchorGeom = new THREE.BoxGeometry(0.8, 0.5, 1)
+  const anchorMat = new THREE.MeshPhongMaterial({ color: 0x222222 })
+  const anchor = new THREE.Mesh(anchorGeom, anchorMat)
+  anchor.position.y = -15
+  anchorGroup.add(anchor)
+  
+  // Arms
+  const armGeom = new THREE.BoxGeometry(2, 0.15, 0.15)
+  const arm1 = new THREE.Mesh(armGeom, anchorMat)
+  arm1.position.set(0, -14.5, 0)
+  anchorGroup.add(arm1)
+  const arm2 = new THREE.Mesh(armGeom, anchorMat)
+  arm2.rotation.y = Math.PI / 2
+  arm2.position.set(0, -14.5, 0)
+  anchorGroup.add(arm2)
+  
+  anchorGroup.visible = false
+  playerShip.add(anchorGroup)
+  anchorMesh = anchorGroup
+}
+
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
@@ -1460,7 +1538,8 @@ function update(dt) {
   
   // Ease player angle towards target rotation (smooth turning)
   // Big ship takes time to react and turn
-  const turnSpeed = 1.0 // How fast the boat actually turns (lower = more lag)
+  // If anchor is dropped, turn VERY slowly
+  const turnSpeed = anchorDropped ? 0.2 : 1.0
   const angleDiff = targetRotation - playerAngle
   if (Math.abs(angleDiff) > 0.001) {
     playerAngle += angleDiff * turnSpeed * dt
@@ -1475,7 +1554,8 @@ function update(dt) {
   
   // Gradually accelerate/decelerate toward target speed (momentum)
   // Big heavy ship takes a long time to speed up and slow down
-  const acceleration = 0.5 // How fast we change speed (lower = heavier feel)
+  // If anchor dropped, no acceleration allowed
+  const acceleration = anchorDropped ? 0 : 0.5
   if (playerSpeed.value < targetSpeed) {
     playerSpeed.value = Math.min(targetSpeed, playerSpeed.value + acceleration * dt)
   } else {
@@ -1498,6 +1578,11 @@ function update(dt) {
   // Update ship mesh
   playerShip.position.x = playerPos.value.x
   playerShip.position.z = playerPos.value.z
+  
+  // Update anchor visibility
+  if (anchorMesh) {
+    anchorMesh.visible = anchorDropped || anchorAnimating
+  }
   playerShip.rotation.y = playerAngle
   
   // Camera follow - interpolate between behind view and top-down based on cameraMode
@@ -2045,6 +2130,10 @@ function startGame() {
   targetRotation = 0
   playerSpeed.value = 0
   
+  // Reset anchor
+  anchorDropped = false
+  anchorAnimating = false
+  
   // Clear old enemy references
   enemyShips.value = []
   enemyShipMeshes.forEach(mesh => scene.remove(mesh))
@@ -2087,6 +2176,7 @@ onUnmounted(() => {
   window.removeEventListener('contextmenu', onContextMenu)
   window.removeEventListener('pointerlockchange', onPointerLockChange)
   window.removeEventListener('wheel', onWheel)
+  window.removeEventListener('keydown', onKeyDown)
   if (document.pointerLockElement) {
     document.exitPointerLock()
   }
