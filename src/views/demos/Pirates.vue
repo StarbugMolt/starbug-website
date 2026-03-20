@@ -1322,7 +1322,7 @@ function updateWindParticles(dt) {
     particle.userData.life += dt
     
     // Base wind movement
-    const baseSpeed = windSpeed.value * 4 * particle.userData.speedMult
+    const baseSpeed = windSpeed.value * 5 * particle.userData.speedMult
     const vx = Math.sin(windAngle) * baseSpeed
     const vz = Math.cos(windAngle) * baseSpeed
     
@@ -1331,14 +1331,18 @@ function updateWindParticles(dt) {
     const swirlX = Math.cos(windAngle) * swirl * particle.userData.swirlRadius
     const swirlZ = -Math.sin(windAngle) * swirl * particle.userData.swirlRadius
     
-    // Player movement compensation - particles stay with world, not player
-    // Add player's velocity to particles so they can keep up
-    const playerVx = Math.sin(playerAngle) * playerSpeed.value * 0.6
-    const playerVz = Math.cos(playerAngle) * playerSpeed.value * 0.6
+    // Player movement - particles move WITH player (relative to player)
+    // So we DON'T add player velocity - particles should stay around the player
+    // Instead, spawn new particles near player when old ones die
     
-    // Move particle (world-relative)
-    particle.userData.x += (vx + swirlX + playerVx) * dt
-    particle.userData.z += (vz + swirlZ + playerVz) * dt
+    // Particles move in wind direction relative to player position
+    // This keeps them around the player
+    const relVx = vx + swirlX
+    const relVz = vz + swirlZ
+    
+    // Move particle
+    particle.userData.x += relVx * dt
+    particle.userData.z += relVz * dt
     
     // Vertical bob
     particle.userData.y += Math.sin(particle.userData.life * 2.5 + particle.userData.swirlPhase) * 0.25 * dt
@@ -1370,22 +1374,16 @@ function updateWindParticles(dt) {
     const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (particle.userData.life > particle.userData.maxLife || dist > 120) {
-      // Spawn particles biased toward player's forward direction
-      // This ensures coverage even when moving fast
-      const playerForwardAngle = playerAngle
-      const angleVariance = (Math.random() - 0.5) * 2.5 // Wider spread forward
-      const spawnAngle = playerForwardAngle + angleVariance
-      
-      // Faster player = spawn further ahead
-      const aheadDist = playerSpeed.value * 1.5
-      const spawnRadius = 15 + Math.random() * 40 + aheadDist
-      
-      particle.userData.x = playerPos.value.x + Math.sin(spawnAngle) * spawnRadius
-      particle.userData.z = playerPos.value.z + Math.cos(spawnAngle) * spawnRadius
-      particle.userData.y = 1 + Math.random() * 12
+    if (particle.userData.life > particle.userData.maxLife || dist > 80) {
+      // Always spawn CLOSE to player (small radius) - no matter what direction
+      // This ensures particles are always visible around the player
+      const spawnAngle = Math.random() * Math.PI * 2
+      const spawnRadius = 8 + Math.random() * 25 // Close spawn
+      particle.userData.x = playerPos.value.x + Math.cos(spawnAngle) * spawnRadius
+      particle.userData.z = playerPos.value.z + Math.sin(spawnAngle) * spawnRadius
+      particle.userData.y = 1 + Math.random() * 10
       particle.userData.life = 0
-      particle.userData.maxLife = 4 + Math.random() * 2.5
+      particle.userData.maxLife = 2 + Math.random() * 2 // Shorter life, more frequent respawns
     }
   })
 }
