@@ -1322,7 +1322,7 @@ function updateWindParticles(dt) {
     particle.userData.life += dt
     
     // Base wind movement
-    const baseSpeed = windSpeed.value * 3.5 * particle.userData.speedMult
+    const baseSpeed = windSpeed.value * 4 * particle.userData.speedMult
     const vx = Math.sin(windAngle) * baseSpeed
     const vz = Math.cos(windAngle) * baseSpeed
     
@@ -1331,9 +1331,14 @@ function updateWindParticles(dt) {
     const swirlX = Math.cos(windAngle) * swirl * particle.userData.swirlRadius
     const swirlZ = -Math.sin(windAngle) * swirl * particle.userData.swirlRadius
     
-    // Move particle
-    particle.userData.x += (vx + swirlX) * dt
-    particle.userData.z += (vz + swirlZ) * dt
+    // Player movement compensation - particles stay with world, not player
+    // So add player's velocity to particles so they can keep up
+    const playerVx = Math.sin(playerAngle) * playerSpeed.value
+    const playerVz = Math.cos(playerAngle) * playerSpeed.value
+    
+    // Move particle (world-relative)
+    particle.userData.x += (vx + swirlX + playerVx * 0.3) * dt
+    particle.userData.z += (vz + swirlZ + playerVz * 0.3) * dt
     
     // Vertical bob
     particle.userData.y += Math.sin(particle.userData.life * 2.5 + particle.userData.swirlPhase) * 0.25 * dt
@@ -1365,7 +1370,7 @@ function updateWindParticles(dt) {
     const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
     
-    if (particle.userData.life > particle.userData.maxLife || dist > 80) {
+    if (particle.userData.life > particle.userData.maxLife || dist > 120) {
       // Spawn anywhere in full circle around player
       const spawnAngle = Math.random() * Math.PI * 2
       const spawnRadius = 10 + Math.random() * 45
