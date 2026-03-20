@@ -1332,13 +1332,13 @@ function updateWindParticles(dt) {
     const swirlZ = -Math.sin(windAngle) * swirl * particle.userData.swirlRadius
     
     // Player movement compensation - particles stay with world, not player
-    // So add player's velocity to particles so they can keep up
-    const playerVx = Math.sin(playerAngle) * playerSpeed.value
-    const playerVz = Math.cos(playerAngle) * playerSpeed.value
+    // Add player's velocity to particles so they can keep up
+    const playerVx = Math.sin(playerAngle) * playerSpeed.value * 0.6
+    const playerVz = Math.cos(playerAngle) * playerSpeed.value * 0.6
     
     // Move particle (world-relative)
-    particle.userData.x += (vx + swirlX + playerVx * 0.3) * dt
-    particle.userData.z += (vz + swirlZ + playerVz * 0.3) * dt
+    particle.userData.x += (vx + swirlX + playerVx) * dt
+    particle.userData.z += (vz + swirlZ + playerVz) * dt
     
     // Vertical bob
     particle.userData.y += Math.sin(particle.userData.life * 2.5 + particle.userData.swirlPhase) * 0.25 * dt
@@ -1371,14 +1371,21 @@ function updateWindParticles(dt) {
     const dist = Math.sqrt(dx * dx + dz * dz)
     
     if (particle.userData.life > particle.userData.maxLife || dist > 120) {
-      // Spawn anywhere in full circle around player
-      const spawnAngle = Math.random() * Math.PI * 2
-      const spawnRadius = 10 + Math.random() * 45
-      particle.userData.x = playerPos.value.x + Math.cos(spawnAngle) * spawnRadius
-      particle.userData.z = playerPos.value.z + Math.sin(spawnAngle) * spawnRadius
+      // Spawn particles biased toward player's forward direction
+      // This ensures coverage even when moving fast
+      const playerForwardAngle = playerAngle
+      const angleVariance = (Math.random() - 0.5) * 2.5 // Wider spread forward
+      const spawnAngle = playerForwardAngle + angleVariance
+      
+      // Faster player = spawn further ahead
+      const aheadDist = playerSpeed.value * 1.5
+      const spawnRadius = 15 + Math.random() * 40 + aheadDist
+      
+      particle.userData.x = playerPos.value.x + Math.sin(spawnAngle) * spawnRadius
+      particle.userData.z = playerPos.value.z + Math.cos(spawnAngle) * spawnRadius
       particle.userData.y = 1 + Math.random() * 12
       particle.userData.life = 0
-      particle.userData.maxLife = 3 + Math.random() * 2.5
+      particle.userData.maxLife = 4 + Math.random() * 2.5
     }
   })
 }
