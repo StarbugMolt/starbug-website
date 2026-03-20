@@ -85,6 +85,10 @@ const gameState = ref('start') // start, playing, gameover
 const victory = ref(false)
 const hp = ref(100)
 const gold = ref(0)
+
+// Treasure system
+const treasure = ref(null) // { x, z, mesh, ringMesh, timer, collecting }
+let treasureCollectTimer = 0
 const message = ref('')
 const enemyIndicators = ref([]) // For directional indicators
 
@@ -900,30 +904,36 @@ function createKraken() {
   eyeR.position.set(4, 5, 8)
   krakenMesh.add(eyeR)
   
-  // Animated tentacles - longer, attached around body
+  // Animated tentacles - attached to body center
   kraken.value.tentacles = []
   for (let i = 0; i < 8; i++) {
-    const tentGeom = new THREE.CylinderGeometry(0.4, 1.5, 40, 8)
+    // Create a group for each tentacle to pivot from body center
+    const tentGroup = new THREE.Group()
+    const angle = (i / 8) * Math.PI * 2
+    tentGroup.rotation.y = angle
+    
+    // Tentacle mesh - positioned extending outward from center
+    const tentGeom = new THREE.CylinderGeometry(0.4, 1.5, 35, 8)
     const tentMat = new THREE.MeshPhongMaterial({ color: 0x1a3030 })
     const tent = new THREE.Mesh(tentGeom, tentMat)
+    tent.position.set(17, 0, 0) // Half of 35 = extends outward from center
+    tent.rotation.z = Math.PI / 2 // Lay horizontal
     
-    // Position around body
-    const angle = (i / 8) * Math.PI * 2
+    tentGroup.add(tent)
+    krakenMesh.add(tentGroup)
+    
+    // Store tentacle data
     tent.userData.angle = angle
     tent.userData.baseAngle = angle
-    
-    // Attached to body, reaching outward
-    tent.position.set(0, 0, 0) // At body center
-    
     tent.userData.phase = Math.random() * Math.PI * 2
     tent.userData.speed = 0.8 + Math.random() * 0.4
-    tent.userData.state = 'idle' // idle, aiming, smashing, recovering
+    tent.userData.state = 'idle'
     tent.userData.targetAngle = 0
     tent.userData.smashCooldown = 0
     tent.userData.smashDuration = 0
     tent.userData.hitChance = 0
+    tent.userData.group = tentGroup // Reference to group for rotation
     
-    krakenMesh.add(tent)
     kraken.value.tentacles.push(tent)
   }
   
@@ -947,6 +957,100 @@ function createKraken() {
   kraken.value.hp = 200
   
   showMessage('💀 THE KRAKEN AWAKENS!', 5000)
+}
+
+// Treasure functions
+function spawnTreasure(x, z) {
+  if (treasure.value) return // Only one treasure at a time
+  
+  // Treasure chest
+  const chestGeom = new THREE.BoxGeometry(1.5, 1, 1)
+  const chestMat = new THREE.MeshPhongMaterial({ color: 0xFFD700 }) // Gold
+  const chest = new THREE.Mesh(chestGeom, chestMat)
+  chest.position.set(x, 1, z)
+  scene.add(chest)
+  
+  // Collection ring
+  const ringGeom = new THREE.RingGeometry(8, 10, 32)
+  const ringMat = new THREE.MeshBasicMaterial({ 
+    color: 0xFFD700, 
+    transparent: true, 
+    opacity: 0.5,
+    side: THREE.DoubleSide 
+  })
+  const ring = new THREE.Mesh(ringGeom, ringMat)
+  ring.rotation.x = -Math.PI / 2
+  ring.position.y = 0.3
+  scene.add(ring)
+  
+  treasure.value = {
+    x: x,
+    z: z,
+    mesh: chest,
+    ringMesh: ring,
+    timer: 60, // 60 seconds
+    collecting: false
+  }
+  
+  showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
+}
+
+function updateTreasure(dt) {
+  if (!treasure.value) return
+  
+  const t = treasure.value
+  
+  // Update timer
+  t.timer -= dt
+  
+  // Check player distance
+  const dx = playerPos.value.x - t.x
+  const dz = playerPos.value.z - t.z
+  const dist = Math.sqrt(dx * dx + dz * dz)
+  
+  // Reset timer if player enters zone
+  if (dist < 10) {
+    t.timer = 60
+  }
+  
+  // Check for collection
+  if (anchorDropped && dist < 10) {
+    if (!t.collecting) {
+      t.collecting = true
+      treasureCollectTimer = 3
+      showMessage('💰 Collecting treasure...', 2000)
+    }
+    
+    treasureCollectTimer -= dt
+    if (treasureCollectTimer <= 0) {
+      // Collected!
+      const coins = Math.floor(50 + Math.random() * 50)
+      gold.value += coins
+      showMessage(`💰 +${coins} Gold!`, 3000)
+      
+      // Remove treasure
+      scene.remove(t.mesh)
+      scene.remove(t.ringMesh)
+      treasure.value = null
+      treasureCollectTimer = 0
+    }
+  } else {
+    t.collecting = false
+    treasureCollectTimer = 0
+  }
+  
+  // Expired treasure
+  if (t.timer <= 0) {
+    showMessage('💨 Treasure lost to the sea...', 2000)
+    scene.remove(t.mesh)
+    scene.remove(t.ringMesh)
+    treasure.value = null
+  }
+  
+  // Update ring pulsing
+  const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.2
+  t.ringMesh.material.opacity = t.collecting ? 0.8 : pulse
+  t.ringMesh.material.color.setHex(t.collecting ? 0x00FF00 : 0xFFD700)
 }
 
 function fireCannon(side) {
@@ -1377,6 +1481,11 @@ function animateSails(dt) {
   
   // Update wind particles
   updateWindParticles(dt)
+  
+  // Update treasure
+  if (gameState.value === 'playing') {
+    updateTreasure(dt)
+  }
 }
 
 // Wind particles system
@@ -1878,6 +1987,12 @@ function update(dt) {
   // Remove fully sunk enemies
   for (let i = enemyShips.value.length - 1; i >= 0; i--) {
     if (enemyShips.value[i].sinking && enemyShips.value[i].sinkingTime > 3) {
+      // Spawn treasure before removing
+      const enemy = enemyShips.value[i]
+      if (!treasure.value) {
+        spawnTreasure(enemy.x, enemy.z)
+      }
+      
       // Remove after 3 seconds of sinking
       const mesh = enemyShipMeshes[i]
       if (mesh) scene.remove(mesh)
@@ -1957,13 +2072,13 @@ function update(dt) {
       }
       
       const tentAngle = tent.userData.angle
+      const tentGroup = tent.userData.group
       
       if (tent.userData.state === 'idle') {
-        // Gentle wave animation
+        // Gentle wave animation using group rotation
         const wave = Math.sin(time * tent.userData.speed + tent.userData.phase) * 0.15
-        tent.rotation.x = Math.PI / 2 + wave
-        tent.rotation.z = Math.cos(tentAngle) * wave
-        tent.rotation.y = tentAngle
+        tentGroup.rotation.x = wave
+        tentGroup.rotation.z = Math.cos(tentAngle) * wave * 0.3
         
         // Check if should attack - player within 35 units
         if (dist < 35 && !anyActive && tent.userData.smashCooldown <= 0) {
@@ -1991,7 +2106,7 @@ function update(dt) {
           tent.userData.state = 'smashing'
           tent.userData.smashDuration = 0
         }
-        tent.rotation.y = tent.userData.angle
+        tentGroup.rotation.y = tent.userData.angle - tentAngle // Relative rotation
       }
       else if (tent.userData.state === 'smashing') {
         tent.userData.smashDuration += dt
@@ -1999,7 +2114,7 @@ function update(dt) {
         // Smash down animation - 0.4 seconds
         if (tent.userData.smashDuration < 0.4) {
           const progress = tent.userData.smashDuration / 0.4
-          tent.rotation.x = Math.PI / 2 - progress * 2.8 // Slam down
+          tentGroup.rotation.x = -progress * 2.5 // Slam down
         }
         // Impact frame - check hit
         else if (tent.userData.smashDuration >= 0.4 && tent.userData.smashDuration < 0.45) {
@@ -2037,20 +2152,21 @@ function update(dt) {
         // Rise back up - 0.6 seconds
         if (tent.userData.recoverDuration < 0.6) {
           const progress = tent.userData.recoverDuration / 0.6
-          tent.rotation.x = (Math.PI / 2 - 2.8) + progress * 2.8
+          tentGroup.rotation.x = -2.5 + progress * 2.5
         } else {
           tent.userData.state = 'idle'
-          tent.userData.smashCooldown = 2 + Math.random() * 2 // 2-4 second cooldown
+          tent.userData.smashCooldown = 2 + Math.random() * 2
+          tentGroup.rotation.x = 0
           // Return to original angle
           const origAngle = (i / 8) * Math.PI * 2
           tent.userData.angle = origAngle
+          tentGroup.rotation.y = 0
         }
       }
       
-      // Update rotation
-      if (tent.userData.state !== 'aiming') {
-        tent.rotation.y = tent.userData.angle
-      }
+      // Update group position to follow kraken
+      tentGroup.position.x = kraken.value.x
+      tentGroup.position.z = kraken.value.z
       
       // Position attached to body (at kraken center)
       tent.position.x = kraken.value.x
@@ -2238,6 +2354,14 @@ function startGame() {
   // Reset anchor
   anchorDropped = false
   anchorAnimating = false
+  
+  // Reset treasure
+  if (treasure.value) {
+    scene.remove(treasure.value.mesh)
+    scene.remove(treasure.value.ringMesh)
+    treasure.value = null
+  }
+  treasureCollectTimer = 0
   
   // Clear old enemy references
   enemyShips.value = []
