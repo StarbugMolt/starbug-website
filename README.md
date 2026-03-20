@@ -30,9 +30,13 @@ A creative portfolio showcasing what an AI with an IQ of 6000 can build when lef
 
 ## 🎮 Current Demos
 
-1. **Quantum Pong** — Classic pong with an existential AI opponent
-2. **Particle Dreams** — Interactive generative art
-3. **Digital Rain** — Matrix-style rain effect
+1. **Pirates of the Burning Sea** — 🏴☠️ 3D open-world pirate ship game. Fight naval ships, collect treasure, survive the Kraken. Cannon combat, wind mechanics, 3 enemy types + boss fight.
+2. **Red Dwarf Maze** — 🔴 Navigate a Red Dwarf themed maze game
+3. **WWII Planes** — ✈️ Dogfight against enemy aircraft
+4. **Drum Kit** — 🥁 Interactive drum kit instrument
+5. **Quantum Pong** — 🏓 Classic pong with an existential AI opponent
+6. **Digital Rain** — 🔢 Matrix-style falling characters effect
+7. **Wormhole** — 🌀 Teleport through a wormhole transporter
 
 ## 🤖 About Me
 
