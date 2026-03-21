@@ -1403,12 +1403,17 @@ function updateTreasure(dt) {
   for (let i = treasures.value.length - 1; i >= 0; i--) {
     const t = treasures.value[i]
     
-    // Handle collected state - fade out and remove
+    // Handle collected/expired state - fade out and remove
     if (t.collected) {
       t.collectFade -= dt * 2 // Fade out over ~0.5 seconds
       if (t.mesh) {
         t.mesh.scale.setScalar(t.collectFade)
-        t.mesh.position.y += dt * 2 // Float up
+        // Float up if collected, sink if expired/sinking
+        if (t.mesh.userData.sinking) {
+          t.mesh.position.y -= dt * 2 // Sink
+        } else {
+          t.mesh.position.y += dt * 2 // Float up
+        }
       }
       if (t.ringMesh) {
         t.ringMesh.scale.setScalar(t.collectFade)
@@ -1447,14 +1452,26 @@ function updateTreasure(dt) {
     }
     
     // Check for collection (only one at a time to prevent spam)
-    if (treasureCollectTimer <= 0 && anchorDropped && dist < 10) {
-      if (!t.collecting) {
-        t.collecting = true
-        treasureCollectTimer = 3
-        showMessage('💰 Collecting treasure...', 2000)
+    if (anchorDropped && dist < 10 && treasureCollectTimer <= 0) {
+      // Start collecting
+      t.collecting = true
+      treasureCollectTimer = 3
+      showMessage('💰 Collecting treasure...', 2000)
+    }
+    
+    // Handle collecting state - shrink the ring and count down
+    if (t.collecting) {
+      treasureCollectTimer -= dt
+      
+      // Shrink the ring as we collect
+      const collectProgress = 1 - (treasureCollectTimer / 3) // 0 to 1 as we collect
+      const ringScale = 1 - (collectProgress * 0.9) // Shrink from 1 to 0.1
+      if (t.ringMesh) {
+        t.ringMesh.scale.setScalar(Math.max(0.1, ringScale))
+        t.ringMesh.material.opacity = 0.5 + collectProgress * 0.4
+        t.ringMesh.material.color.setHex(0x00FF00) // Green while collecting
       }
       
-      treasureCollectTimer -= dt
       if (treasureCollectTimer <= 0) {
         // Collected!
         const coins = Math.floor(50 + Math.random() * 50)
@@ -1465,26 +1482,27 @@ function updateTreasure(dt) {
         t.collected = true
         t.collectFade = 1.0
         treasureCollectTimer = 0
+        t.collecting = false
       }
-    } else if (dist >= 10) {
-      t.collecting = false
     }
     
-    // Expired treasure
+    // Reset collecting if player moves away
+    if (dist >= 10 && t.collecting) {
+      t.collecting = false
+      treasureCollectTimer = 0
+      // Reset ring scale
+      if (t.ringMesh) {
+        t.ringMesh.scale.setScalar(1)
+      }
+    }
+    
+    // Expired treasure - fade out and sink
     if (t.timer <= 0) {
       showMessage('💨 Treasure lost to the sea...', 2000)
-      if (t.mesh) {
-        scene.remove(t.mesh)
-        t.mesh.geometry?.dispose()
-        t.mesh.material?.dispose()
-      }
-      if (t.ringMesh) {
-        scene.remove(t.ringMesh)
-        t.ringMesh.geometry?.dispose()
-        t.ringMesh.material?.dispose()
-      }
-      treasures.value.splice(i, 1)
-      continue
+      // Fade out and sink
+      t.collected = true
+      t.collectFade = 1.0
+      t.mesh.userData.sinking = true
     }
     
     // Update mesh positions (world coordinates)
