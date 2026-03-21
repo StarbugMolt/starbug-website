@@ -1,38 +1,33 @@
 # Pirates Game - TODO List
 
-## Completed Features
+## In Progress / Next
+- [ ] Visual improvements for waves
+- [ ] Player ship damage visuals
+- [ ] Re-enable Kraken (currently disabled for performance)
+
+## Performance Optimizations (DONE)
+- [x] Distance-based enemy activation (400 units)
+- [x] Icon render distance (200 units)
+- [x] Cannonball culling (>300 units)
+- [x] Throttled AI updates (every 2nd frame)
+- [x] Enemy state machine (IDLE/ALERT/ATTACKING)
+- [x] Kraken visibility culling (300 units)
+
+## Done
 - [x] Player ship with 3 cannons per side (cone fire)
 - [x] Cannon cone angles (10° spread)
 - [x] Wind particle system with trails
 - [x] Enemy ships (Rammer, Normal, Galleon)
-- [x] Enemy AI behaviors
-- [x] Kraken with tentacles and whirlpool
-- [x] Treasure system
-- [x] Anchor mechanics (A key)
+- [x] Enemy AI with state machine
+- [x] Treasure system (100/125/150 based on enemy type)
+- [x] Anchor mechanics (A key) with shrinking ring
 - [x] Camera zoom (mouse wheel)
 - [x] Health bars on enemies
 - [x] Sinking animations
-
-## In Progress / Next
-- [ ] Visual improvements for waves
-- [ ] Player ship damage visuals
-
-## Performance Optimizations
-- [x] Distance-based enemy activation (400 units)
-- [x] Icon render distance (200 units)
-- [x] Kraken visibility culling (300 units)
-- [ ] Cannonball culling (>300 units)
-- [ ] Throttled AI updates (every 2nd frame)
-- [ ] Sleep inactive enemies
-- [ ] Batch obstacle checks
-- [ ] Reduce particles when idle
-
-## Completed (just added)
-- [x] Infinite world (9x9 procedural grid)
-- [x] Harbor graphics on islands (30% of islands)
-- [x] Random ships per chunk (0-3 per chunk)
+- [x] Infinite procedural world (9x9 chunk grid)
+- [x] Bigger varied islands with harbors
 - [x] Enemy line-of-sight raycasting
-- [x] PERFORMANCE.md with optimization rules
+- [x] Enemies avoid islands, can hit rocks
 
 ## Ideas / Backlog
 - [ ] Multiple treasure chests
@@ -46,4 +41,4 @@
 
 ---
 
-*Last updated: 2026-03-20*
+*Last updated: 2026-03-21*
