@@ -216,10 +216,10 @@ function init() {
 }
 
 function createOcean() {
-  // === BEAUTIFUL OCEAN WITH REAL WAVES ===
+  // === OCEAN WITH OPTIMIZED WAVES ===
   
-  // Deep ocean layer (dark base)
-  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 120, 120)
+  // Deep ocean layer - reduced segments for performance
+  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 60, 60)
   const oceanMaterial = new THREE.MeshPhongMaterial({
     color: 0x005577, // Deep blue
     shininess: 200,
@@ -233,8 +233,8 @@ function createOcean() {
   ocean.userData.originalPositions = oceanGeometry.attributes.position.array.slice()
   scene.add(ocean)
 
-  // Wave surface layer - higher detail
-  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 150, 150)
+  // Wave surface layer - reduced segments
+  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 80, 80)
   const waveMaterial = new THREE.MeshPhongMaterial({
     color: 0x0088aa, // Lighter blue
     shininess: 250,
@@ -253,8 +253,8 @@ function createOcean() {
   // Store reference
   ocean = waves
 
-  // Foam/whitecap layer
-  const foamGeometry = new THREE.PlaneGeometry(1500, 1500, 80, 80)
+  // Foam/whitecap layer - reduced segments
+  const foamGeometry = new THREE.PlaneGeometry(1500, 1500, 40, 40)
   const foamMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
@@ -274,7 +274,7 @@ function createOcean() {
 function animateOceanWaves(time) {
   if (!ocean || !ocean.userData.originalPositions) return
   
-  // Animate main wave layer
+  // Animate main wave layer - simplified calculation
   const positions = ocean.geometry.attributes.position
   const original = ocean.userData.originalPositions
   
@@ -282,25 +282,15 @@ function animateOceanWaves(time) {
     const x = original[i * 3]
     const z = original[i * 3 + 2]
     
-    // Large rolling swells
-    const swell = Math.sin(x * 0.008 + time * 0.3) * Math.cos(z * 0.006 + time * 0.2) * 1.5
+    // Simplified wave calculation
+    const swell = Math.sin(x * 0.01 + time * 0.4) * Math.cos(z * 0.008 + time * 0.3) * 1.2
+    const wave = Math.sin(x * 0.03 + time * 0.6) * Math.cos(z * 0.025 + time * 0.5) * 0.6
     
-    // Medium waves
-    const wave1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(z * 0.015 + time * 0.4) * 0.8
-    
-    // Small ripples
-    const wave2 = Math.sin(x * 0.08 + time * 1.2) * 0.2
-    const wave3 = Math.sin(z * 0.06 + time * 0.9) * 0.15
-    
-    // Wind choppiness
-    const chop = (Math.sin(time * 2 + x * 0.1) + Math.cos(time * 1.5 + z * 0.1)) * 0.1
-    
-    // Combine all wave heights
-    positions.array[i * 3 + 1] = swell + wave1 + wave2 + wave3 + chop
+    positions.array[i * 3 + 1] = swell + wave
   }
   positions.needsUpdate = true
   
-  // Animate foam layer (whitecaps on wave peaks)
+  // Animate foam layer - simplified
   if (ocean.userData.foam) {
     const foamPositions = ocean.userData.foam.geometry.attributes.position
     const foamOriginal = ocean.userData.foam.userData.originalPositions
@@ -309,16 +299,10 @@ function animateOceanWaves(time) {
       const x = foamOriginal[i * 3]
       const z = foamOriginal[i * 3 + 2]
       
-      // Foam appears on wave crests
-      const swell = Math.sin(x * 0.008 + time * 0.3) * Math.cos(z * 0.006 + time * 0.2) * 1.5
-      const wave1 = Math.sin(x * 0.02 + time * 0.5) * Math.cos(z * 0.015 + time * 0.4) * 0.8
+      const waveHeight = Math.sin(x * 0.01 + time * 0.4) * Math.cos(z * 0.008 + time * 0.3) * 1.2
+      const foam = waveHeight > 0.8 ? (waveHeight - 0.8) * 0.2 : 0
       
-      const waveHeight = swell + wave1
-      
-      // Only show foam on wave crests
-      const foam = waveHeight > 1.2 ? (waveHeight - 1.2) * 0.3 : 0
-      
-      foamPositions.array[i * 3 + 1] = waveHeight * 0.3 + foam
+      foamPositions.array[i * 3 + 1] = waveHeight * 0.2 + foam
     }
     foamPositions.needsUpdate = true
   }
@@ -333,31 +317,11 @@ function createSky() {
   sun.lookAt(0, 0, 0)
   scene.add(sun)
 
-  // Clouds
-  for (let i = 0; i < 20; i++) {
-    const cloudGroup = new THREE.Group()
-    const cloudSize = Math.random() * 5 + 3
-    
-    for (let j = 0; j < 5; j++) {
-      const puff = new THREE.Mesh(
-        new THREE.SphereGeometry(cloudSize + Math.random() * 2, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })
-      )
-      puff.position.set(
-        (Math.random() - 0.5) * cloudSize * 2,
-        (Math.random() - 0.5) * cloudSize,
-        (Math.random() - 0.5) * cloudSize
-      )
-      cloudGroup.add(puff)
-    }
-    
-    cloudGroup.position.set(
-      (Math.random() - 0.5) * 300,
-      60 + Math.random() * 30, // Higher to avoid camera clipping
-      (Math.random() - 0.5) * 300
-    )
-    scene.add(cloudGroup)
-  }
+  // [CLOUDS DISABLED] - too heavy, can re-enable later with optimization
+  // Reduced from 20 clouds x 5 spheres = 100 meshes to just 5 simple clouds
+  // if (false) { // Cloud toggle
+  //   for (let i = 0; i < 20; i++) { ... }
+  // }
 }
 
 function createPlayerShip() {
@@ -1985,7 +1949,7 @@ function animateSails(dt) {
 
 // Wind particles system
 let windParticles = []
-const maxWindParticles = 100
+const maxWindParticles = 50
 
 // Chunk size
 const CHUNK_SIZE = 200 // Each chunk is 200x200 units
@@ -2952,11 +2916,11 @@ function updateEnemyIndicators() {
 
 // Wake particle functions
 function spawnWakeParticle(x, z, angle, isEnemy) {
-  const wakeGeom = new THREE.SphereGeometry(0.3, 6, 6)
+  const wakeGeom = new THREE.SphereGeometry(0.15, 4, 4)
   const wakeMat = new THREE.MeshBasicMaterial({ 
     color: 0xffffff, 
     transparent: true, 
-    opacity: 0.6 
+    opacity: 0.4 
   })
   const wake = new THREE.Mesh(wakeGeom, wakeMat)
   
