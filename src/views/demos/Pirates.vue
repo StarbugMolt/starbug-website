@@ -86,6 +86,12 @@ const victory = ref(false)
 const hp = ref(100)
 const gold = ref(0)
 
+// Fire effects for damaged ships
+const playerFire = ref(null) // { mesh, particles: [] }
+const enemyFires = ref([]) // Array of { mesh, particles: [], hp }
+
+let fireScene = null // Fire scene for particle effects
+
 // Treasure system
 const treasures = ref([]) // Array of treasure entities { x, z, mesh, ringMesh, timer, collecting, collected, collectFade }
 let treasureCollectTimer = 0
@@ -2179,6 +2185,120 @@ function hasLineOfSight(x1, z1, x2, z2) {
   return true
 }
 
+// Fire effect for damaged ships
+function createFire(x, z, isEnemy = false) {
+  const fireGroup = new THREE.Group()
+  
+  // Create multiple flame particles
+  const flames = []
+  for (let i = 0; i < 5; i++) {
+    const flameGeom = new THREE.SphereGeometry(0.3 + Math.random() * 0.2, 6, 6)
+    const flameMat = new THREE.MeshBasicMaterial({
+      color: Math.random() > 0.5 ? 0xff6600 : 0xff3300,
+      transparent: true,
+      opacity: 0.8
+    })
+    const flame = new THREE.Mesh(flameGeom, flameMat)
+    flame.position.set(
+      (Math.random() - 0.5) * 1.5,
+      1.5 + Math.random() * 0.5,
+      (Math.random() - 0.5) * 1.5
+    )
+    flame.userData.baseY = flame.position.y
+    flame.userData.phase = Math.random() * Math.PI * 2
+    flames.push(flame)
+    fireGroup.add(flame)
+  }
+  
+  // Add smoke (grey spheres above flames)
+  for (let i = 0; i < 3; i++) {
+    const smokeGeom = new THREE.SphereGeometry(0.4 + Math.random() * 0.3, 5, 5)
+    const smokeMat = new THREE.MeshBasicMaterial({
+      color: 0x444444,
+      transparent: true,
+      opacity: 0.4
+    })
+    const smoke = new THREE.Mesh(smokeGeom, smokeMat)
+    smoke.position.set(
+      (Math.random() - 0.5) * 1,
+      2.5 + Math.random() * 0.5,
+      (Math.random() - 0.5) * 1
+    )
+    smoke.userData.baseY = smoke.position.y
+    smoke.userData.phase = Math.random() * Math.PI * 2
+    flames.push(smoke)
+    fireGroup.add(smoke)
+  }
+  
+  fireGroup.position.set(x, 0, z)
+  scene.add(fireGroup)
+  
+  return { mesh: fireGroup, flames }
+}
+
+function updateFireEffects(dt) {
+  const time = Date.now() * 0.001
+  
+  // Player fire
+  if (playerFire.value) {
+    const hpPercent = hp.value / 100
+    if (hpPercent > 0.5) {
+      // Remove fire if health restored
+      scene.remove(playerFire.value.mesh)
+      playerFire.value = null
+    } else {
+      // Animate flames
+      playerFire.value.mesh.position.set(playerPos.value.x, 0, playerPos.value.z)
+      const intensity = 1 - (hpPercent / 0.5) // 0 when 50% hp, 1 when 0% hp
+      
+      for (const flame of playerFire.value.flames) {
+        const flicker = Math.sin(time * 10 + flame.userData.phase) * 0.2 * intensity
+        flame.scale.setScalar(0.5 + flicker + intensity * 0.5)
+        flame.position.y = flame.userData.baseY + flicker * 0.5
+      }
+    }
+  } else if (hp.value < 50) {
+    // Create fire when damaged
+    playerFire.value = createFire(playerPos.value.x, playerPos.value.z)
+  }
+  
+  // Enemy fires
+  for (let i = enemyFires.value.length - 1; i >= 0; i--) {
+    const fire = enemyFires.value[i]
+    const enemy = enemyShips.value.find(e => e === fire.enemy)
+    
+    if (!enemy || enemy.hp > enemy.maxHp * 0.5) {
+      // Remove fire if enemy healed or dead
+      scene.remove(fire.mesh)
+      enemyFires.value.splice(i, 1)
+    } else {
+      // Animate flames
+      fire.mesh.position.set(enemy.x, 0, enemy.z)
+      const hpPercent = enemy.hp / enemy.maxHp
+      const intensity = 1 - (hpPercent / 0.5)
+      
+      for (const flame of fire.flames) {
+        const flicker = Math.sin(time * 10 + flame.userData.phase) * 0.2 * intensity
+        flame.scale.setScalar(0.5 + flicker + intensity * 0.5)
+        flame.position.y = flame.userData.baseY + flicker * 0.5
+      }
+    }
+  }
+  
+  // Create fire for damaged enemies
+  for (const enemy of enemyShips.value) {
+    if (enemy.hp > 0 && enemy.hp < enemy.maxHp * 0.5) {
+      const hasFire = enemyFires.value.some(f => f.enemy === enemy)
+      if (!hasFire) {
+        enemyFires.value.push({
+          enemy,
+          ...createFire(enemy.x, enemy.z, true)
+        })
+      }
+    }
+  }
+}
+
 function update(dt) {
   if (gameState.value !== 'playing') return
   
@@ -2857,6 +2977,9 @@ function update(dt) {
   }
   updateWakeParticles(dt)
   
+  // Update fire effects on damaged ships
+  updateFireEffects(dt)
+  
   // === UPDATE ENEMY INDICATORS ===
   updateEnemyIndicators()
 }
@@ -3005,6 +3128,14 @@ function startGame() {
   // Reset anchor
   anchorDropped = false
   anchorAnimating = false
+  
+  // Clear fire effects
+  if (playerFire.value) {
+    scene.remove(playerFire.value.mesh)
+    playerFire.value = null
+  }
+  enemyFires.value.forEach(f => scene.remove(f.mesh))
+  enemyFires.value = []
   
   // Reset treasures - remove all treasure entities
   treasures.value.forEach(t => {
