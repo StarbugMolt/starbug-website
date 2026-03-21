@@ -951,7 +951,7 @@ function createKraken() {
 }
 
 // Treasure functions
-function spawnTreasure(x, z) {
+function spawnTreasure(x, z, baseGold = 50) {
   // Treasure chest
   const chestGeom = new THREE.BoxGeometry(1.5, 1, 1)
   const chestMat = new THREE.MeshPhongMaterial({ color: 0xFFD700 }) // Gold
@@ -981,12 +981,23 @@ function spawnTreasure(x, z) {
     timer: 60, // 60 seconds
     collecting: false,
     collected: false,
-    collectFade: 1.0
+    collectFade: 1.0,
+    gold: baseGold + Math.floor(Math.random() * 50)
   }
   
   treasures.value.push(treasureEntity)
   
   showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
+}
+
+function spawnEnemyTreasure(enemy) {
+  // Treasure based on enemy type
+  let baseGold
+  if (enemy.type === 'RAMMER') baseGold = 125
+  else if (enemy.type === 'BIG') baseGold = 150
+  else baseGold = 100 // NORMAL
+  
+  spawnTreasure(enemy.x, enemy.z, baseGold)
 }
 
 // Procedural world generation
@@ -1474,7 +1485,7 @@ function updateTreasure(dt) {
       
       if (treasureCollectTimer <= 0) {
         // Collected!
-        const coins = Math.floor(50 + Math.random() * 50)
+        const coins = t.gold || 50
         gold.value += coins
         showMessage(`💰 +${coins} Gold!`, 3000)
         
@@ -2609,7 +2620,7 @@ function update(dt) {
     if (enemyShips.value[i].sinking && enemyShips.value[i].sinkingTime > 3) {
       // Spawn treasure before removing (unique entity each time)
       const enemy = enemyShips.value[i]
-      spawnTreasure(enemy.x, enemy.z)
+      spawnEnemyTreasure(enemy)
       
       // Remove after 3 seconds of sinking
       const mesh = enemyShipMeshes[i]
@@ -2624,12 +2635,12 @@ function update(dt) {
     gold.value += 200
     showMessage('💰 All enemies destroyed! +200 Gold')
     
-    // Spawn kraken after delay
-    setTimeout(() => {
-      if (gameState.value === 'playing') {
-        createKraken()
-      }
-    }, 3000)
+    // [KRAKEN DISABLED]
+    // setTimeout(() => {
+    //   if (gameState.value === 'playing') {
+    //     createKraken()
+    //   }
+    // }, 3000)
   }
   
   // Kraken AI
@@ -3033,9 +3044,10 @@ function startGame() {
     scene.remove(krakenMesh)
     krakenMesh = null
   }
-  krakenActive = true
-  kraken.value = { x: startX, z: startZ, hp: 200, angle: 0, tentacles: [] }
-  createKraken()
+  // [KRAKEN DISABLED]
+  // krakenActive = true
+  // kraken.value = { x: startX, z: startZ, hp: 200, angle: 0, tentacles: [] }
+  // createKraken()
   
   // Clear cannonballs
   cannonballs.forEach(b => scene.remove(b.mesh))
