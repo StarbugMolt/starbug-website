@@ -1259,22 +1259,39 @@ function spawnIsland(x, z) {
   
   // 30% chance of harbor (bigger dock for bigger islands)
   if (Math.random() < 0.3) {
-    const dockLength = 10 + islandSize * 0.3
-    const dockGeom = new THREE.BoxGeometry(dockLength, 0.3, 5)
+    const dockLength = 12 + islandSize * 0.4
+    const dockGeom = new THREE.BoxGeometry(dockLength, 0.3, 4)
     const dockMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
     const dock = new THREE.Mesh(dockGeom, dockMat)
+    // Dock extends outward from island edge (no rotation - straight line)
     dock.position.set(islandSize + dockLength / 2, 0.2, 0)
-    dock.rotation.y = Math.random() * Math.PI
+    dock.rotation.y = 0 // Pointing outward from island center
     islandGroup.add(dock)
     
-    // Dock posts
-    for (let p = 0; p < 4; p++) {
-      const postGeom = new THREE.CylinderGeometry(0.2, 0.2, 2)
+    // Dock posts (along the dock)
+    for (let p = 0; p < 3; p++) {
+      const postGeom = new THREE.CylinderGeometry(0.2, 0.2, 1.5)
       const post = new THREE.Mesh(postGeom, dockMat)
-      post.position.set(islandSize + (p % 2) * dockLength / 2, 1, Math.floor(p / 2) * 4 - 2)
+      post.position.set(islandSize + 3 + p * 4, 0.9, 0)
       islandGroup.add(post)
     }
     
+    // Red circle at dock end (like treasure - player anchors here)
+    const dockEndX = islandSize + dockLength
+    const dockEndRingGeom = new THREE.RingGeometry(6, 8, 32)
+    const dockEndRingMat = new THREE.MeshBasicMaterial({ 
+      color: 0xff0000, 
+      transparent: true, 
+      opacity: 0.5,
+      side: THREE.DoubleSide 
+    })
+    const dockEndRing = new THREE.Mesh(dockEndRingGeom, dockEndRingMat)
+    dockEndRing.rotation.x = -Math.PI / 2
+    dockEndRing.position.set(dockEndX, 0.2, 0)
+    islandGroup.add(dockEndRing)
+    
+    // Store dock end position for gameplay
+    islandGroup.userData.dockEndX = dockEndX
     islandGroup.userData.hasHarbor = true
   }
   
@@ -1400,7 +1417,7 @@ function updateTreasure(dt) {
     if (t.collected) {
       t.collectFade -= dt * 2 // Fade out over ~0.5 seconds
       if (t.mesh) {
-        t.mesh.scale.setScalar(t.collectFade)
+        t.mesh.scale.setScalar(Math.max(0.01, t.collectFade))
         // Float up if collected, sink if expired/sinking
         if (t.mesh.userData.sinking) {
           t.mesh.position.y -= dt * 2 // Sink
@@ -1409,7 +1426,9 @@ function updateTreasure(dt) {
         }
       }
       if (t.ringMesh) {
-        t.ringMesh.scale.setScalar(t.collectFade)
+        // Ring shrinks to 0 then disappears
+        t.ringMesh.scale.setScalar(Math.max(0.01, t.collectFade))
+        t.ringMesh.material.opacity = Math.max(0, t.collectFade)
       }
       
       if (t.collectFade <= 0) {
@@ -2076,8 +2095,8 @@ function updateWindParticles(dt) {
 }
 
 // Check if a position would collide with obstacles
-function checkObstacleCollision(x, z, radius) {
-  // Check islands - enemies ALWAYS avoid islands
+function checkIslandCollision(x, z, radius) {
+  // Check only islands (for obstacle avoidance)
   for (const island of islands) {
     const dx = x - island.x
     const dz = z - island.z
@@ -2094,27 +2113,10 @@ function checkObstacleCollision(x, z, radius) {
     }
   }
   
-  // Check rocks only (for collision damage - enemies can sometimes hit rocks)
-  for (const rock of rocks) {
-    const dx = x - rock.x
-    const dz = z - rock.z
-    if (Math.sqrt(dx * dx + dz * dz) < rock.radius + radius) {
-      return true
-    }
-  }
-  
-  for (const rock of worldObjects.rocks) {
-    const dx = x - rock.x
-    const dz = z - rock.z
-    if (Math.sqrt(dx * dx + dz * dz) < rock.radius + radius) {
-      return true
-    }
-  }
-  
   return false
 }
 
-// Check only rocks for damage (enemies can sometimes hit rocks)
+// Check rocks only (for collision damage - enemies can sometimes hit rocks)
 function checkRockCollision(x, z, radius) {
   for (const rock of rocks) {
     const dx = x - rock.x
@@ -2502,40 +2504,51 @@ function update(dt) {
         // Rammers charge directly at player
         targetAngle = Math.atan2(dx, dz)
       } else if (enemy.type === 'NORMAL') {
+        // Normal ships try to stay at medium range and circle
         if (distToPlayer > 35) {
           targetAngle = Math.atan2(dx, dz)
-        } else if (distToPlayer < 15) {
-          targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
+        } else if (distToPlayer < 20) {
+          targetAngle = Math.atan2(dx, dz) + Math.PI * 0.7
         } else {
-          targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.6 : -0.6)
+          targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.5 : -0.5)
         }
       } else if (enemy.type === 'BIG') {
-        if (distToPlayer > 40) {
+        // Big ships try to get broadside for maximum firepower
+        if (distToPlayer > 45) {
+          // Too far - approach while trying to angle correctly
           targetAngle = Math.atan2(dx, dz)
-        } else if (distToPlayer < 20) {
+        } else if (distToPlayer < 25) {
+          // Too close - back off while turning to broadside
           targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
         } else {
-          targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.8 : -0.8)
+          // Good range - try to be perpendicular to player for broadside
+          // Circle to the side based on which side is closer to broadside
+          const perpAngle = Math.atan2(dx, dz) + Math.PI * 0.5
+          const otherAngle = Math.atan2(dx, dz) - Math.PI * 0.5
+          // Pick the direction that gets us to broadside faster
+          const angleDiff = Math.abs(enemy.angle - perpAngle)
+          const otherDiff = Math.abs(enemy.angle - otherAngle)
+          targetAngle = angleDiff < otherDiff ? perpAngle : otherAngle
         }
       }
     }
     
-    // Check for obstacles ahead (with randomness - AI isn't perfect)
+    // Check for islands ahead only (enemies ignore rocks for avoidance)
     const lookAheadX = enemy.x + Math.sin(enemy.angle) * 15
     const lookAheadZ = enemy.z + Math.cos(enemy.angle) * 15
-    const obstacleAhead = checkObstacleCollision(lookAheadX, lookAheadZ, 5)
+    const islandAhead = checkIslandCollision(lookAheadX, lookAheadZ, 5)
     
     // 15% chance to not notice obstacle (stupid AI)
     const oblivious = Math.random() < 0.15
     
     let moveAngle = targetAngle
     
-    if (obstacleAhead && !oblivious) {
-      const leftCheck = checkObstacleCollision(
+    if (islandAhead && !oblivious) {
+      const leftCheck = checkIslandCollision(
         enemy.x + Math.sin(enemy.angle + 0.5) * 10,
         enemy.z + Math.cos(enemy.angle + 0.5) * 10, 5
       )
-      const rightCheck = checkObstacleCollision(
+      const rightCheck = checkIslandCollision(
         enemy.x + Math.sin(enemy.angle - 0.5) * 10,
         enemy.z + Math.cos(enemy.angle - 0.5) * 10, 5
       )
@@ -2554,7 +2567,7 @@ function update(dt) {
     
     // Move at speed based on type and state
     let speedMult = enemy.speedMod || 1.0
-    if (obstacleAhead) speedMult *= 0.5
+    if (islandAhead) speedMult *= 0.5
     const enemySpeed = shipType.speed * speedMult
     enemy.x += Math.sin(enemy.angle) * enemySpeed * dt
     enemy.z += Math.cos(enemy.angle) * enemySpeed * dt
@@ -2630,11 +2643,11 @@ function update(dt) {
     // Enemy fires only when attacking and in range
     if (enemy.state === 'ATTACKING' || enemy.state === 'ALERT') {
       const now = Date.now()
-      // Increased fire rates for menace
-      const fireChance = enemy.type === 'BIG' ? 0.05 : (enemy.type === 'NORMAL' ? 0.07 : 0.08)
-      const fireRange = enemy.type === 'NORMAL' ? 40 : 50
+      // Fire rates - more aggressive
+      const fireChance = enemy.type === 'BIG' ? 0.08 : (enemy.type === 'NORMAL' ? 0.1 : 0.15)
+      const fireRange = enemy.type === 'NORMAL' ? 45 : 55
       
-      if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 1500) {
+      if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 1200) {
         // Check line of sight to player
         if (hasLineOfSight(enemy.x, enemy.z, playerPos.value.x, playerPos.value.z)) {
           enemy.lastShot = now
