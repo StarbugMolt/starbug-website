@@ -1255,33 +1255,43 @@ function spawnChunk(cx, cz) {
 function spawnIsland(x, z) {
   const islandGroup = new THREE.Group()
   
-  // Sand
-  const sandGeom = new THREE.ConeGeometry(15 + Math.random() * 10, 8, 8)
+  // Random island size - bigger islands now
+  const islandSize = 20 + Math.random() * 25 // 20-45 radius
+  const islandHeight = 6 + islandSize * 0.3
+  
+  // Sand base - larger cone
+  const sandGeom = new THREE.ConeGeometry(islandSize, islandHeight, 8)
   const sandMat = new THREE.MeshPhongMaterial({ color: 0xF4A460 })
   const sand = new THREE.Mesh(sandGeom, sandMat)
-  sand.position.y = 2
+  sand.position.y = islandHeight / 2
   islandGroup.add(sand)
   
-  // Palm tree
-  const trunkGeom = new THREE.CylinderGeometry(0.3, 0.4, 5)
-  const trunkMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
-  const trunk = new THREE.Mesh(trunkGeom, trunkMat)
-  trunk.position.y = 6
-  islandGroup.add(trunk)
+  // Multiple palm trees for bigger islands
+  const numTrees = Math.floor(1 + islandSize / 20)
+  for (let t = 0; t < numTrees; t++) {
+    const treeX = (Math.random() - 0.5) * islandSize * 0.6
+    const treeZ = (Math.random() - 0.5) * islandSize * 0.6
+    
+    const trunkGeom = new THREE.CylinderGeometry(0.3, 0.4, 5 + islandSize * 0.1)
+    const trunkMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
+    const trunk = new THREE.Mesh(trunkGeom, trunkMat)
+    trunk.position.set(treeX, islandHeight / 2 + 2 + islandSize * 0.05, treeZ)
+    islandGroup.add(trunk)
+    
+    const leavesGeom = new THREE.ConeGeometry(3 + islandSize * 0.1, 4 + islandSize * 0.05, 8)
+    const leavesMat = new THREE.MeshPhongMaterial({ color: 0x228B22 })
+    const leaves = new THREE.Mesh(leavesGeom, leavesMat)
+    leaves.position.set(treeX, islandHeight / 2 + 4 + islandSize * 0.1, treeZ)
+    islandGroup.add(leaves)
+  }
   
-  const leavesGeom = new THREE.ConeGeometry(2.5, 4, 8)
-  const leavesMat = new THREE.MeshPhongMaterial({ color: 0x228B22 })
-  const leaves = new THREE.Mesh(leavesGeom, leavesMat)
-  leaves.position.y = 9
-  islandGroup.add(leaves)
-  
-  // 30% chance of harbor
+  // 30% chance of harbor (bigger dock for bigger islands)
   if (Math.random() < 0.3) {
-    // Harbor - small dock area
-    const dockGeom = new THREE.BoxGeometry(8, 0.3, 4)
+    const dockLength = 10 + islandSize * 0.3
+    const dockGeom = new THREE.BoxGeometry(dockLength, 0.3, 5)
     const dockMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
     const dock = new THREE.Mesh(dockGeom, dockMat)
-    dock.position.set(12, 0.2, 0)
+    dock.position.set(islandSize + dockLength / 2, 0.2, 0)
     dock.rotation.y = Math.random() * Math.PI
     islandGroup.add(dock)
     
@@ -1289,7 +1299,7 @@ function spawnIsland(x, z) {
     for (let p = 0; p < 4; p++) {
       const postGeom = new THREE.CylinderGeometry(0.2, 0.2, 2)
       const post = new THREE.Mesh(postGeom, dockMat)
-      post.position.set(8 + (p % 2) * 6, 1, Math.floor(p / 2) * 4 - 2)
+      post.position.set(islandSize + (p % 2) * dockLength / 2, 1, Math.floor(p / 2) * 4 - 2)
       islandGroup.add(post)
     }
     
@@ -1298,7 +1308,7 @@ function spawnIsland(x, z) {
   
   islandGroup.position.set(x, 0, z)
   scene.add(islandGroup)
-  worldObjects.islands.push({ x, z, radius: 20, mesh: islandGroup })
+  worldObjects.islands.push({ x, z, radius: islandSize, mesh: islandGroup })
 }
 
 function spawnSunkenShip(x, z) {
@@ -1989,9 +1999,9 @@ const KRAKEN_RENDER_DIST = 300
 const CANNONBALL_CULL_DIST = 300
 
 // Enemy AI state machine distances
-const ENEMY_IDLE_DIST = 250 // Beyond this = idle (don't chase)
-const ENEMY_ALERT_DIST = 150 // Beyond this = alert (start approaching)
-const ENEMY_ATTACK_DIST = 80 // Within this = attacking (full chase)
+const ENEMY_IDLE_DIST = 200 // Beyond this = idle (don't chase)
+const ENEMY_ALERT_DIST = 120 // Beyond this = alert (start approaching)
+const ENEMY_ATTACK_DIST = 100 // Within this = attacking (full chase)
 
 function createWindParticles() {
   for (let i = 0; i < maxWindParticles; i++) {
@@ -2095,7 +2105,7 @@ function updateWindParticles(dt) {
 
 // Check if a position would collide with obstacles
 function checkObstacleCollision(x, z, radius) {
-  // Check static islands
+  // Check islands - enemies ALWAYS avoid islands
   for (const island of islands) {
     const dx = x - island.x
     const dz = z - island.z
@@ -2104,7 +2114,6 @@ function checkObstacleCollision(x, z, radius) {
     }
   }
   
-  // Check procedural islands
   for (const island of worldObjects.islands) {
     const dx = x - island.x
     const dz = z - island.z
@@ -2113,7 +2122,7 @@ function checkObstacleCollision(x, z, radius) {
     }
   }
   
-  // Check static rocks
+  // Check rocks only (for collision damage - enemies can sometimes hit rocks)
   for (const rock of rocks) {
     const dx = x - rock.x
     const dz = z - rock.z
@@ -2122,7 +2131,27 @@ function checkObstacleCollision(x, z, radius) {
     }
   }
   
-  // Check procedural rocks
+  for (const rock of worldObjects.rocks) {
+    const dx = x - rock.x
+    const dz = z - rock.z
+    if (Math.sqrt(dx * dx + dz * dz) < rock.radius + radius) {
+      return true
+    }
+  }
+  
+  return false
+}
+
+// Check only rocks for damage (enemies can sometimes hit rocks)
+function checkRockCollision(x, z, radius) {
+  for (const rock of rocks) {
+    const dx = x - rock.x
+    const dz = z - rock.z
+    if (Math.sqrt(dx * dx + dz * dz) < rock.radius + radius) {
+      return true
+    }
+  }
+  
   for (const rock of worldObjects.rocks) {
     const dx = x - rock.x
     const dz = z - rock.z
@@ -2449,15 +2478,17 @@ function update(dt) {
       spawnWakeParticle(enemy.x, enemy.z, enemy.angle, true)
     }
     
-    // Check if enemy hit an obstacle (takes damage)
-    if (checkObstacleCollision(enemy.x, enemy.z, 3)) {
-      enemy.hp -= 10 * dt
-      // Push away from obstacle slightly
-      const pushAngle = Math.random() * Math.PI * 2
-      enemy.x += Math.sin(pushAngle) * 2
-      enemy.z += Math.cos(pushAngle) * 2
-      if (Math.random() < 0.1) {
-        showMessage(`💥 ${enemy.type} hit an obstacle!`, 1000)
+    // Check if enemy hit a rock (takes damage but keeps going sometimes)
+    if (checkRockCollision(enemy.x, enemy.z, 3)) {
+      enemy.hp -= 5 * dt // Less damage from rocks
+      // Only push away 30% of the time (sometimes they get stuck)
+      if (Math.random() < 0.3) {
+        const pushAngle = Math.random() * Math.PI * 2
+        enemy.x += Math.sin(pushAngle) * 2
+        enemy.z += Math.cos(pushAngle) * 2
+      }
+      if (Math.random() < 0.05) {
+        showMessage(`💥 ${enemy.type} scraped a rock!`, 1000)
       }
     }
     
@@ -2511,12 +2542,13 @@ function update(dt) {
     }
     
     // Enemy fires only when attacking and in range
-    if (enemy.state === 'ATTACKING') {
+    if (enemy.state === 'ATTACKING' || enemy.state === 'ALERT') {
       const now = Date.now()
-      const fireChance = enemy.type === 'BIG' ? 0.015 : (enemy.type === 'NORMAL' ? 0.02 : 0.005)
-      const fireRange = enemy.type === 'NORMAL' ? 25 : 35
+      // Increased fire rates for menace
+      const fireChance = enemy.type === 'BIG' ? 0.05 : (enemy.type === 'NORMAL' ? 0.07 : 0.08)
+      const fireRange = enemy.type === 'NORMAL' ? 40 : 50
       
-      if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 2000) {
+      if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 1500) {
         // Check line of sight to player
         if (hasLineOfSight(enemy.x, enemy.z, playerPos.value.x, playerPos.value.z)) {
           enemy.lastShot = now
