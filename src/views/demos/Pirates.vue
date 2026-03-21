@@ -1075,7 +1075,7 @@ function spawnChunk(cx, cz) {
   const isStartingChunk = (cx === 0 && cz === 0)
   
   // Spawn islands (1-3 per chunk) - away from borders
-  const numIslands = 1 + Math.floor(Math.random() * 3)
+  const numIslands = 1 + Math.floor(Math.random() * 2) // 1-2 islands per chunk
   for (let i = 0; i < numIslands; i++) {
     const angle = Math.random() * Math.PI * 2
     const maxDist = (CHUNK_SIZE / 2) - 40 // Keep 40 units from edge
