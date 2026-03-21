@@ -1074,15 +1074,17 @@ function spawnChunk(cx, cz) {
   // Skip ships in starting chunk (0,0) - spawnEnemyShip handles initial enemies
   const isStartingChunk = (cx === 0 && cz === 0)
   
-  // Spawn islands (1-3 per chunk) - away from borders
-  const numIslands = 1 + Math.floor(Math.random() * 2) // 1-2 islands per chunk
-  for (let i = 0; i < numIslands; i++) {
-    const angle = Math.random() * Math.PI * 2
-    const maxDist = (CHUNK_SIZE / 2) - 40 // Keep 40 units from edge
-    const dist = 20 + Math.random() * maxDist
-    const ix = worldX + Math.cos(angle) * dist
-    const iz = worldZ + Math.sin(angle) * dist
-    spawnIsland(ix, iz)
+  // 40% chance of island per chunk, then 1-2 islands
+  if (Math.random() < 0.4) {
+    const numIslands = 1 + Math.floor(Math.random() * 2)
+    for (let i = 0; i < numIslands; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const maxDist = (CHUNK_SIZE / 2) - 40 // Keep 40 units from edge
+      const dist = 20 + Math.random() * maxDist
+      const ix = worldX + Math.cos(angle) * dist
+      const iz = worldZ + Math.sin(angle) * dist
+      spawnIsland(ix, iz)
+    }
   }
   
   // Spawn rocks (3-6 per chunk) - away from borders
