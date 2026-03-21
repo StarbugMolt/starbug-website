@@ -1977,6 +1977,11 @@ const KRAKEN_INACTIVE_DIST = 300
 const KRAKEN_RENDER_DIST = 300
 const CANNONBALL_CULL_DIST = 300
 
+// Enemy AI state machine distances
+const ENEMY_IDLE_DIST = 250 // Beyond this = idle (don't chase)
+const ENEMY_ALERT_DIST = 150 // Beyond this = alert (start approaching)
+const ENEMY_ATTACK_DIST = 80 // Within this = attacking (full chase)
+
 function createWindParticles() {
   for (let i = 0; i < maxWindParticles; i++) {
     // Each wind particle is a line (trail)
@@ -2336,35 +2341,56 @@ function update(dt) {
     
     // Within active range - full AI
     mesh.visible = true
-    let targetAngle = Math.atan2(dx, dz)
     
-    // Different behavior based on ship type
-    if (enemy.type === 'RAMMER') {
-      // Rammers charge directly at player
-      targetAngle = Math.atan2(dx, dz)
-    } else if (enemy.type === 'NORMAL') {
-      // Normal ships - approach and try to stay at medium distance
-      if (distToPlayer > 35) {
-        // Too far - move toward player
-        targetAngle = Math.atan2(dx, dz)
-      } else if (distToPlayer < 15) {
-        // Too close - back off
-        targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
-      } else {
-        // Good range - circle around
-        targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.6 : -0.6)
+    // Enemy state machine
+    if (!enemy.state) enemy.state = 'IDLE'
+    
+    // State transitions based on distance
+    if (distToPlayer > ENEMY_IDLE_DIST) {
+      enemy.state = 'IDLE'
+    } else if (distToPlayer > ENEMY_ATTACK_DIST) {
+      enemy.state = 'ALERT'
+    } else {
+      enemy.state = 'ATTACKING'
+    }
+    
+    let targetAngle = enemy.angle // Default: keep current direction
+    
+    // Different behavior based on state
+    if (enemy.state === 'IDLE') {
+      // Wander randomly, don't chase player
+      if (!enemy.idleAngle || Math.random() < 0.01) {
+        enemy.idleAngle = enemy.angle + (Math.random() - 0.5) * 1.5
       }
-    } else if (enemy.type === 'BIG') {
-      // Big ships - approach slowly but steadily, try to broadside
-      if (distToPlayer > 40) {
-        // Too far - move toward player
+      targetAngle = enemy.idleAngle
+    } else if (enemy.state === 'ALERT') {
+      // Start approaching player, but slower
+      targetAngle = Math.atan2(dx, dz)
+      // Slow movement toward player
+      enemy.speedMod = enemy.speedMod || 0.5
+    } else {
+      // ATTACKING - full chase behavior
+      enemy.speedMod = 1.0
+      
+      if (enemy.type === 'RAMMER') {
+        // Rammers charge directly at player
         targetAngle = Math.atan2(dx, dz)
-      } else if (distToPlayer < 20) {
-        // Too close - back off slightly
-        targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
-      } else {
-        // Good range - circle around for broadside
-        targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.8 : -0.8)
+      } else if (enemy.type === 'NORMAL') {
+        if (distToPlayer > 35) {
+          targetAngle = Math.atan2(dx, dz)
+        } else if (distToPlayer < 15) {
+          targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
+        } else {
+          targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.6 : -0.6)
+        }
+      } else if (enemy.type === 'BIG') {
+        if (distToPlayer > 40) {
+          targetAngle = Math.atan2(dx, dz)
+        } else if (distToPlayer < 20) {
+          targetAngle = Math.atan2(dx, dz) + Math.PI * 0.5
+        } else {
+          targetAngle = Math.atan2(dx, dz) + (index % 2 === 0 ? 0.8 : -0.8)
+        }
       }
     }
     
@@ -2400,8 +2426,10 @@ function update(dt) {
     // Smoothly turn toward target
     enemy.angle += (moveAngle - enemy.angle) * dt * shipType.turnSpeed
     
-    // Move at speed based on type
-    const enemySpeed = obstacleAhead ? shipType.speed * 0.5 : shipType.speed
+    // Move at speed based on type and state
+    let speedMult = enemy.speedMod || 1.0
+    if (obstacleAhead) speedMult *= 0.5
+    const enemySpeed = shipType.speed * speedMult
     enemy.x += Math.sin(enemy.angle) * enemySpeed * dt
     enemy.z += Math.cos(enemy.angle) * enemySpeed * dt
     
@@ -2471,16 +2499,18 @@ function update(dt) {
       showMessage(`⚔️ Collision with ${typeName}!`)
     }
     
-    // Enemy fires based on type and line of sight
-    const now = Date.now()
-    const fireChance = enemy.type === 'BIG' ? 0.015 : (enemy.type === 'NORMAL' ? 0.02 : 0.005)
-    const fireRange = enemy.type === 'NORMAL' ? 25 : 35
-    
-    if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 2000) {
-      // Check line of sight to player
-      if (hasLineOfSight(enemy.x, enemy.z, playerPos.value.x, playerPos.value.z)) {
-        enemy.lastShot = now
-        fireEnemyCannonMulti(enemy, shipType, index)
+    // Enemy fires only when attacking and in range
+    if (enemy.state === 'ATTACKING') {
+      const now = Date.now()
+      const fireChance = enemy.type === 'BIG' ? 0.015 : (enemy.type === 'NORMAL' ? 0.02 : 0.005)
+      const fireRange = enemy.type === 'NORMAL' ? 25 : 35
+      
+      if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 2000) {
+        // Check line of sight to player
+        if (hasLineOfSight(enemy.x, enemy.z, playerPos.value.x, playerPos.value.z)) {
+          enemy.lastShot = now
+          fireEnemyCannonMulti(enemy, shipType, index)
+        }
       }
     }
   })

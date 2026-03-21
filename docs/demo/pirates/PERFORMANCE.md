@@ -9,6 +9,9 @@
 | `ACTIVE_DIST` | 400 | Beyond this = placeholder only (no activation) |
 | `KRAKEN_INACTIVE_DIST` | 300 | Kraken stays as point, keeps minimal AI |
 | `KRAKEN_RENDER_DIST` | 300 | Kraken renders at this distance |
+| `ENEMY_IDLE_DIST` | 250 | Enemy idle - wanders randomly, no chase |
+| `ENEMY_ALERT_DIST` | 150 | Enemy alert - starts approaching |
+| `ENEMY_ATTACK_DIST` | 80 | Enemy attacking - full chase and fire |
 
 ## Rules
 
@@ -17,6 +20,11 @@
 - **200-400**: Rendered but stationary, no movement/AI calculations
 - **< 200**: Full activation - icons + AI + physics
 - **> ICON_RENDER_DIST (200)**: No indicator icon shown
+
+#### Enemy State Machine
+- **IDLE** (>250 units): Wanders randomly, no chase, no firing
+- **ALERT** (150-250 units): Approaching player slowly, no firing
+- **ATTACKING** (<150 units): Full chase, fires cannons, active combat
 
 ### Kraken
 - **> KRAKEN_RENDER_DIST (300)**: Point only, reduced AI (random movement only), no 3D mesh
