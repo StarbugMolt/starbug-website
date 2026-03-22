@@ -21,12 +21,12 @@
 
     <!-- Enemy indicator arrows and health bars -->
     <div class="indicators">
-      <div 
-        v-for="(enemy, index) in enemyIndicators" 
+      <div
+        v-for="(enemy, index) in enemyIndicators"
         :key="index"
         class="indicator"
-        :style="{ 
-          left: enemy.x + '%', 
+        :style="{
+          left: enemy.x + '%',
           top: enemy.y + '%',
           transform: 'translate(-50%, -50%) rotate(' + enemy.angle + 'rad)'
         }"
@@ -35,8 +35,8 @@
         <span class="indicator-label">{{ enemy.label }}</span>
         <!-- Health bar -->
         <div class="health-bar-container">
-          <div 
-            class="health-bar" 
+          <div
+            class="health-bar"
             :style="{ width: (enemy.hpPercent * 100) + '%' }"
           ></div>
         </div>
@@ -83,8 +83,8 @@
           <div class="upgrade-bonus">
             {{ playerUpgrades.sailSpeed === 0 ? '+0 max speed' : `+${playerUpgrades.sailSpeed * 3} max speed` }}
           </div>
-          <button 
-            v-if="playerUpgrades.sailSpeed < 3" 
+          <button
+            v-if="playerUpgrades.sailSpeed < 3"
             class="upgrade-btn"
             @click="buyUpgrade('sailSpeed')"
           >
@@ -92,7 +92,7 @@
           </button>
           <div v-else class="upgrade-max">MAXED</div>
         </div>
-        
+
         <!-- More Cannons -->
         <div class="upgrade-card">
           <div class="upgrade-icon">💣</div>
@@ -101,8 +101,8 @@
           <div class="upgrade-bonus">
             {{ playerUpgrades.cannonCount === 0 ? '3 cannons/side' : `${3 + playerUpgrades.cannonCount * 2} cannons/side` }}
           </div>
-          <button 
-            v-if="playerUpgrades.cannonCount < 3" 
+          <button
+            v-if="playerUpgrades.cannonCount < 3"
             class="upgrade-btn"
             @click="buyUpgrade('cannonCount')"
           >
@@ -110,7 +110,7 @@
           </button>
           <div v-else class="upgrade-max">MAXED</div>
         </div>
-        
+
         <!-- Faster Cannons -->
         <div class="upgrade-card">
           <div class="upgrade-icon">⚡</div>
@@ -119,8 +119,8 @@
           <div class="upgrade-bonus">
             {{ playerUpgrades.cannonSpeed === 0 ? '1.5s cooldown' : `${(1.5 - playerUpgrades.cannonSpeed * 0.25).toFixed(2)}s cooldown` }}
           </div>
-          <button 
-            v-if="playerUpgrades.cannonSpeed < 3" 
+          <button
+            v-if="playerUpgrades.cannonSpeed < 3"
             class="upgrade-btn"
             @click="buyUpgrade('cannonSpeed')"
           >
@@ -128,14 +128,14 @@
           </button>
           <div v-else class="upgrade-max">MAXED</div>
         </div>
-        
+
         <!-- Repair Haul -->
         <div class="upgrade-card repair-card">
           <div class="upgrade-icon">🔧</div>
           <div class="upgrade-name">Repair Haul</div>
           <div class="upgrade-level">∞ Infinite</div>
           <div class="upgrade-bonus">Restore 10 HP for {{ 100 + playerUpgrades.repairCount * 10 }}g</div>
-          <button 
+          <button
             class="upgrade-btn repair-btn"
             @click="buyUpgrade('repairHaul')"
           >
@@ -149,8 +149,8 @@
           <div class="upgrade-name">Max HP</div>
           <div class="upgrade-level">+{{ playerUpgrades.maxHpBonus * 10 }} / +10 per level</div>
           <div class="upgrade-bonus">Current max: {{ 100 + playerUpgrades.maxHpBonus * 10 }} HP</div>
-          <button 
-            v-if="playerUpgrades.maxHpBonus < 5" 
+          <button
+            v-if="playerUpgrades.maxHpBonus < 5"
             class="upgrade-btn"
             @click="buyUpgrade('maxHpBonus')"
           >
@@ -159,7 +159,7 @@
           <div v-else class="upgrade-max">MAXED (150 HP)</div>
         </div>
       </div>
-      
+
       <div class="shop-message" v-if="shopMessage">{{ shopMessage }}</div>
       <button class="leave-btn" @click="closeShop">⚓ SET SAIL</button>
       <div class="shop-hint">Press A to raise anchor and sail</div>
@@ -210,11 +210,13 @@ const showShopMessage = (msg) => {
 }
 
 // Memory management
-const MEMORY_SWPEEP_INTERVAL = 30 // seconds between forced cleanups
 const MAX_TREASURES = 10
 const MAX_CANNONBALLS = 40
 const MAX_WAKE_PARTICLES = 50
-let memorySweepTimer = 0
+const MAX_ISLANDS = 15  // Max islands to keep loaded
+const MAX_ROCKS = 30   // Max rocks to keep loaded
+const MAX_DISPOSE_PER_FRAME = 3 // Spread disposal across frames to avoid lag spikes
+let disposeQueue = [] // Pending { mesh, type } for gradual disposal
 let lastChunkCount = 0
 
 // Computed for HUD
@@ -313,40 +315,24 @@ function disposeGroup(group) {
   scene.remove(group)
 }
 
-// Periodic JIT memory cleanup - called every 30 seconds
-function forceMemorySweep() {
-  // Cull excess cannonballs
-  while (cannonballs.length > MAX_CANNONBALLS) {
-    const ball = cannonballs.shift()
-    if (ball && ball.mesh) {
-      disposeMesh(ball.mesh)
+// Queue something for gradual disposal (avoids synchronous spikes)
+function queueForDisposal(mesh) {
+  if (mesh) disposeQueue.push(mesh)
+}
+
+// Process a few pending disposals per frame (non-blocking)
+function processDisposalQueue() {
+  for (let i = 0; i < MAX_DISPOSE_PER_FRAME; i++) {
+    if (disposeQueue.length === 0) break
+    const mesh = disposeQueue.shift()
+    if (mesh) {
+      if (mesh.isGroup) {
+        disposeGroup(mesh)
+      } else {
+        disposeMesh(mesh)
+      }
     }
   }
-  
-  // Cull excess wake particles
-  while (playerWake.length > MAX_WAKE_PARTICLES) {
-    const wake = playerWake.shift()
-    if (wake && wake.mesh) disposeMesh(wake.mesh)
-  }
-  
-  // Cull excess treasures (keep most recent)
-  while (treasures.value.length > MAX_TREASURES) {
-    const t = treasures.value.shift()
-    if (t) {
-      if (t.mesh) disposeMesh(t.mesh)
-      if (t.ringMesh) disposeMesh(t.ringMesh)
-    }
-  }
-  
-  // Force chunk cleanup check
-  cleanupDistantChunks()
-  
-  // Log if chunk count growing (memory leak indicator)
-  const chunkCount = spawnedChunks.size
-  if (chunkCount > lastChunkCount + 5) {
-    console.warn(`[MEMORY] Chunk count jumped: ${lastChunkCount} -> ${chunkCount}`)
-  }
-  lastChunkCount = chunkCount
 }
 
 function init() {
@@ -378,7 +364,7 @@ function init() {
 
   // Sky
   createSky()
-  
+
   // Wind particles
   createWindParticles()
 
@@ -403,7 +389,7 @@ function init() {
 
 function createOcean() {
   // === OCEAN WITH OPTIMIZED WAVES ===
-  
+
   // Deep ocean layer - reduced segments for performance
   const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 60, 60)
   const oceanMaterial = new THREE.MeshPhongMaterial({
@@ -435,7 +421,7 @@ function createOcean() {
   waves.userData.originalPositions = waveGeometry.attributes.position.array.slice()
   waves.userData.isWaveLayer = true
   scene.add(waves)
-  
+
   // Store reference
   ocean = waves
 
@@ -459,35 +445,35 @@ function createOcean() {
 // Animate ocean waves - beautiful realistic movement
 function animateOceanWaves(time) {
   if (!ocean || !ocean.userData.originalPositions) return
-  
+
   // Animate main wave layer - simplified calculation
   const positions = ocean.geometry.attributes.position
   const original = ocean.userData.originalPositions
-  
+
   for (let i = 0; i < positions.count; i++) {
     const x = original[i * 3]
     const z = original[i * 3 + 2]
-    
+
     // Simplified wave calculation
     const swell = Math.sin(x * 0.01 + time * 0.4) * Math.cos(z * 0.008 + time * 0.3) * 1.2
     const wave = Math.sin(x * 0.03 + time * 0.6) * Math.cos(z * 0.025 + time * 0.5) * 0.6
-    
+
     positions.array[i * 3 + 1] = swell + wave
   }
   positions.needsUpdate = true
-  
+
   // Animate foam layer - simplified
   if (ocean.userData.foam) {
     const foamPositions = ocean.userData.foam.geometry.attributes.position
     const foamOriginal = ocean.userData.foam.userData.originalPositions
-    
+
     for (let i = 0; i < foamPositions.count; i++) {
       const x = foamOriginal[i * 3]
       const z = foamOriginal[i * 3 + 2]
-      
+
       const waveHeight = Math.sin(x * 0.01 + time * 0.4) * Math.cos(z * 0.008 + time * 0.3) * 1.2
       const foam = waveHeight > 0.8 ? (waveHeight - 0.8) * 0.2 : 0
-      
+
       foamPositions.array[i * 3 + 1] = waveHeight * 0.2 + foam
     }
     foamPositions.needsUpdate = true
@@ -523,7 +509,7 @@ function createPlayerShip() {
   hullShape.lineTo(-1.5, 4)
   hullShape.lineTo(-1.8, 0)
   hullShape.closePath()
-  
+
   const extrudeSettings = { depth: 2, bevelEnabled: true, bevelThickness: 0.2, bevelSize: 0.1, bevelSegments: 2 }
   const hullGeometry = new THREE.ExtrudeGeometry(hullShape, extrudeSettings)
   const hullMaterial = new THREE.MeshPhongMaterial({ color: 0x5C3317 }) // Darker wood
@@ -573,7 +559,7 @@ function createPlayerShip() {
 
   // === MASTS ===
   const mastMaterial = new THREE.MeshPhongMaterial({ color: 0x4A3728 })
-  
+
   // Main mast - thicker
   const mainMastGeom = new THREE.CylinderGeometry(0.25, 0.3, 12, 8)
   const mainMast = new THREE.Mesh(mainMastGeom, mastMaterial)
@@ -636,10 +622,10 @@ function createPlayerShip() {
 
   // === WHITE SAILS THAT REACT TO WIND - SQUARE RIG STYLE ===
   // Sails have yards (spars) at top and bottom, sides billow outward
-  
+
   // Main sail - 3D yard arms
   const mainSailGroup = new THREE.Group()
-  
+
   // Top yard (horizontal spar)
   const topYardGeom = new THREE.CylinderGeometry(0.08, 0.08, 6, 8)
   const yardMat = new THREE.MeshPhongMaterial({ color: 0x654321 })
@@ -647,17 +633,17 @@ function createPlayerShip() {
   topYard.rotation.z = Math.PI / 2
   topYard.position.y = 3.5
   mainSailGroup.add(topYard)
-  
+
   // Bottom yard
   const botYard = new THREE.Mesh(topYardGeom, yardMat)
   botYard.rotation.z = Math.PI / 2
   botYard.position.y = -3.5
   mainSailGroup.add(botYard)
-  
+
   // The sail cloth - vertices organized so top row (y=max) and bottom row (y=min) stay fixed
   const sailGeom = new THREE.PlaneGeometry(5.5, 7, 12, 14)
-  const sailMat = new THREE.MeshPhongMaterial({ 
-    color: 0xffffff, 
+  const sailMat = new THREE.MeshPhongMaterial({
+    color: 0xffffff,
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.95
@@ -756,17 +742,17 @@ function createPlayerShip() {
     portL.position.set(-1.5, 1.5, i * 2)
     portL.rotation.z = Math.PI / 2
     playerShip.add(portL)
-    
+
     const portR = new THREE.Mesh(portGeometry, portMaterial)
     portR.position.set(1.5, 1.5, i * 2)
     portR.rotation.z = Math.PI / 2
     playerShip.add(portR)
   }
-  
+
   // Side cannons (port) - 3 cannons
   const sideCannonGeom = new THREE.CylinderGeometry(0.15, 0.2, 1.2)
   const sideCannonMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
-  
+
   // Port side cannons - 3 cannons angled for cone fire
   // i = -1 (front): 10° forward, i = 0 (middle): straight, i = 1 (back): 10° backward
   for (let i = -1; i <= 1; i++) {
@@ -777,7 +763,7 @@ function createPlayerShip() {
     cannon.rotation.y = i * (10 * Math.PI / 180) // 10 degrees cone
     playerShip.add(cannon)
   }
-  
+
   // Starboard side cannons - 3 cannons angled for cone fire
   for (let i = -1; i <= 1; i++) {
     const cannon = new THREE.Mesh(sideCannonGeom, sideCannonMat)
@@ -798,7 +784,7 @@ function spawnEnemyShip() {
   enemyShipMeshes.forEach(mesh => scene.remove(mesh))
   enemyShipMeshes = []
   enemyShips.value = []
-  
+
   // Spawn 3 different enemy types at different positions
   const types = ['RAMMER', 'NORMAL', 'BIG']
   const positions = [
@@ -806,16 +792,16 @@ function spawnEnemyShip() {
     { x: -180, z: -250 },
     { x: 100, z: -300 }
   ]
-  
+
   // Validate positions - make sure they're not on islands/rocks
   for (let i = 0; i < positions.length; i++) {
     let valid = false
     let attempts = 0
     let pos = { ...positions[i] }
-    
+
     while (!valid && attempts < 20) {
       valid = true
-      
+
       // Check islands
       for (const island of worldObjects.islands) {
         const dx = pos.x - island.x
@@ -825,7 +811,7 @@ function spawnEnemyShip() {
           break
         }
       }
-      
+
       // Check rocks
       if (valid) {
         for (const rock of worldObjects.rocks) {
@@ -837,22 +823,22 @@ function spawnEnemyShip() {
           }
         }
       }
-      
+
       if (!valid) {
         pos.x = (Math.random() - 0.5) * 400
         pos.z = (Math.random() - 0.5) * 400 - 100
         if (Math.sqrt(pos.x * pos.x + pos.z * pos.z) < 150) valid = false
       }
-      
+
       attempts++
     }
     positions[i] = pos
   }
-  
+
   types.forEach((type, index) => {
     const shipType = SHIP_TYPES[type]
     const pos = positions[index]
-    
+
     // Create enemy data
     const enemy = {
       x: pos.x,
@@ -866,14 +852,14 @@ function spawnEnemyShip() {
       sinkingTime: 0
     }
     enemyShips.value.push(enemy)
-    
+
     // Create mesh
     const mesh = createEnemyShipMesh(shipType)
     mesh.position.set(enemy.x, 0, enemy.z)
     scene.add(mesh)
     enemyShipMeshes.push(mesh)
   })
-  
+
   showMessage('⚔️ 3 Enemy ships approaching!', 3000)
 }
 
@@ -882,7 +868,7 @@ function createEnemyShipMesh(shipType) {
   const size = shipType.size
   const woodMat = new THREE.MeshPhongMaterial({ color: 0x654321 })
   const sailMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
-  
+
   // === IMPROVED HULL (tapered shape) ===
   const hullShape = new THREE.Shape()
   hullShape.moveTo(-1.5 * size, -4 * size)
@@ -892,7 +878,7 @@ function createEnemyShipMesh(shipType) {
   hullShape.lineTo(-1.5 * size, 4 * size)
   hullShape.lineTo(-1.8 * size, 0)
   hullShape.closePath()
-  
+
   const extrudeSettings = { depth: 2 * size, bevelEnabled: true, bevelThickness: 0.2 * size, bevelSize: 0.1 * size, bevelSegments: 2 }
   const hullGeom = new THREE.ExtrudeGeometry(hullShape, extrudeSettings)
   const hullMat = new THREE.MeshPhongMaterial({ color: shipType.color })
@@ -900,21 +886,21 @@ function createEnemyShipMesh(shipType) {
   hull.rotation.x = -Math.PI / 2
   hull.position.y = 0.5 * size
   mesh.add(hull)
-  
+
   // Hull stripe
   const stripeGeom = new THREE.BoxGeometry(3.2 * size, 0.15 * size, 8.5 * size)
   const stripeMat = new THREE.MeshPhongMaterial({ color: 0x8B0000 })
   const stripe = new THREE.Mesh(stripeGeom, stripeMat)
   stripe.position.y = 1.3 * size
   mesh.add(stripe)
-  
+
   // Deck
   const deckGeom = new THREE.BoxGeometry(2.8 * size, 0.25 * size, 7.5 * size)
   const deckMat = new THREE.MeshPhongMaterial({ color: 0xDEB887 })
   const deck = new THREE.Mesh(deckGeom, deckMat)
   deck.position.y = 2.1 * size
   mesh.add(deck)
-  
+
   // Railings
   const railMat = new THREE.MeshPhongMaterial({ color: 0x3D2817 })
   for (let i = 0; i < 6; i++) {
@@ -925,7 +911,7 @@ function createEnemyShipMesh(shipType) {
     railPost2.position.set(1.3 * size, 2.7 * size, -3 + i * 1.2 * size)
     mesh.add(railPost2)
   }
-  
+
   // === MASTS ===
   // Main mast
   const mainMast = new THREE.Mesh(
@@ -934,7 +920,7 @@ function createEnemyShipMesh(shipType) {
   )
   mainMast.position.set(0, 7.5 * size, 0)
   mesh.add(mainMast)
-  
+
   // Main yard (horizontal spar)
   const yard1 = new THREE.Mesh(
     new THREE.CylinderGeometry(0.06 * size, 0.06 * size, 7 * size, 8),
@@ -943,7 +929,7 @@ function createEnemyShipMesh(shipType) {
   yard1.rotation.z = Math.PI / 2
   yard1.position.set(0, 12 * size, 0)
   mesh.add(yard1)
-  
+
   // Main sail - attached to yard, faces sideways
   const mainSail = new THREE.Mesh(
     new THREE.PlaneGeometry(6 * size, 6 * size),
@@ -952,7 +938,7 @@ function createEnemyShipMesh(shipType) {
   mainSail.position.set(0, 10 * size, 0)
   mainSail.rotation.y = Math.PI / 2
   mesh.add(mainSail)
-  
+
   // Lower yard and sail
   const yard2 = new THREE.Mesh(
     new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 5 * size, 8),
@@ -961,7 +947,7 @@ function createEnemyShipMesh(shipType) {
   yard2.rotation.z = Math.PI / 2
   yard2.position.set(0, 7 * size, 0)
   mesh.add(yard2)
-  
+
   const lowerSail = new THREE.Mesh(
     new THREE.PlaneGeometry(4 * size, 4 * size),
     sailMat
@@ -969,7 +955,7 @@ function createEnemyShipMesh(shipType) {
   lowerSail.position.set(0, 5.5 * size, 0)
   lowerSail.rotation.y = Math.PI / 2
   mesh.add(lowerSail)
-  
+
   // Fore mast
   const foreMast = new THREE.Mesh(
     new THREE.CylinderGeometry(0.18 * size, 0.22 * size, 8 * size, 8),
@@ -977,7 +963,7 @@ function createEnemyShipMesh(shipType) {
   )
   foreMast.position.set(0, 5 * size, -3 * size)
   mesh.add(foreMast)
-  
+
   // Fore yard
   const foreYard = new THREE.Mesh(
     new THREE.CylinderGeometry(0.05 * size, 0.05 * size, 4 * size, 8),
@@ -986,7 +972,7 @@ function createEnemyShipMesh(shipType) {
   foreYard.rotation.z = Math.PI / 2
   foreYard.position.set(0, 7.5 * size, -3 * size)
   mesh.add(foreYard)
-  
+
   // Fore sail
   const foreSail = new THREE.Mesh(
     new THREE.PlaneGeometry(3.5 * size, 3.5 * size),
@@ -995,16 +981,16 @@ function createEnemyShipMesh(shipType) {
   foreSail.position.set(0, 6 * size, -3 * size)
   foreSail.rotation.y = Math.PI / 2
   mesh.add(foreSail)
-  
+
   // Flag
-  const flagMat = new THREE.MeshBasicMaterial({ 
-    color: shipType === SHIP_TYPES.RAMMER ? 0xff0000 : (shipType === SHIP_TYPES.BIG ? 0xffff00 : 0x0000ff) 
+  const flagMat = new THREE.MeshBasicMaterial({
+    color: shipType === SHIP_TYPES.RAMMER ? 0xff0000 : (shipType === SHIP_TYPES.BIG ? 0xffff00 : 0x0000ff)
   })
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.5 * size, 1 * size), flagMat)
   flag.position.set(0, 13 * size, 0)
   flag.rotation.y = Math.PI / 2
   mesh.add(flag)
-  
+
   // Rammer spike
   if (shipType === SHIP_TYPES.RAMMER) {
     const spike = new THREE.Mesh(
@@ -1015,18 +1001,18 @@ function createEnemyShipMesh(shipType) {
     spike.position.set(0, 1 * size, 5 * size)
     mesh.add(spike)
   }
-  
+
   // No animated sails for enemies
   mesh.userData.sails = []
-  
+
   return mesh
 }
 
 function createKraken() {
   if (krakenMesh) scene.remove(krakenMesh)
-  
+
   krakenMesh = new THREE.Group()
-  
+
   // Bigger, more impressive body
   const bodyGeometry = new THREE.SphereGeometry(12, 20, 20)
   const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0x1a3030 })
@@ -1034,7 +1020,7 @@ function createKraken() {
   body.scale.y = 0.6
   body.position.y = 3
   krakenMesh.add(body)
-  
+
   // Glowing eyes
   const eyeGeometry = new THREE.SphereGeometry(2, 12, 12)
   const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff3333 })
@@ -1044,7 +1030,7 @@ function createKraken() {
   const eyeR = new THREE.Mesh(eyeGeometry, eyeMaterial)
   eyeR.position.set(4, 5, 8)
   krakenMesh.add(eyeR)
-  
+
   // Animated tentacles - attached to body center
   kraken.value.tentacles = []
   for (let i = 0; i < 8; i++) {
@@ -1052,17 +1038,17 @@ function createKraken() {
     const tentGroup = new THREE.Group()
     const angle = (i / 8) * Math.PI * 2
     tentGroup.rotation.y = angle
-    
+
     // Tentacle mesh - positioned extending outward from center
     const tentGeom = new THREE.CylinderGeometry(0.4, 1.5, 35, 8)
     const tentMat = new THREE.MeshPhongMaterial({ color: 0x1a3030 })
     const tent = new THREE.Mesh(tentGeom, tentMat)
     tent.position.set(17, 0, 0) // Half of 35 = extends outward from center
     tent.rotation.z = Math.PI / 2 // Lay horizontal
-    
+
     tentGroup.add(tent)
     krakenMesh.add(tentGroup)
-    
+
     // Store tentacle data
     tent.userData.angle = angle
     tent.userData.baseAngle = angle
@@ -1074,29 +1060,29 @@ function createKraken() {
     tent.userData.smashDuration = 0
     tent.userData.hitChance = 0
     tent.userData.group = tentGroup // Reference to group for rotation
-    
+
     kraken.value.tentacles.push(tent)
   }
-  
+
   // Whirlpool effect (particle ring around kraken)
   const whirlpoolGeom = new THREE.RingGeometry(15, 25, 32)
-  const whirlpoolMat = new THREE.MeshBasicMaterial({ 
-    color: 0x4488ff, 
-    transparent: true, 
+  const whirlpoolMat = new THREE.MeshBasicMaterial({
+    color: 0x4488ff,
+    transparent: true,
     opacity: 0.3,
-    side: THREE.DoubleSide 
+    side: THREE.DoubleSide
   })
   const whirlpool = new THREE.Mesh(whirlpoolGeom, whirlpoolMat)
   whirlpool.rotation.x = -Math.PI / 2
   whirlpool.position.y = 0.5
   krakenMesh.add(whirlpool)
   krakenMesh.userData.whirlpool = whirlpool
-  
+
   krakenMesh.position.set(0, 0, 0)
   scene.add(krakenMesh)
   krakenActive = true
   kraken.value.hp = 200
-  
+
   showMessage('💀 THE KRAKEN AWAKENS!', 5000)
 }
 
@@ -1110,27 +1096,27 @@ function spawnTreasure(x, z, baseGold = 50) {
       if (old.ringMesh) disposeMesh(old.ringMesh)
     }
   }
-  
+
   // Treasure chest
   const chestGeom = new THREE.BoxGeometry(1.5, 1, 1)
   const chestMat = new THREE.MeshPhongMaterial({ color: 0xFFD700 }) // Gold
   const chest = new THREE.Mesh(chestGeom, chestMat)
   chest.position.set(x, 1, z)
   scene.add(chest)
-  
+
   // Collection ring
   const ringGeom = new THREE.RingGeometry(8, 10, 32)
-  const ringMat = new THREE.MeshBasicMaterial({ 
-    color: 0xFFD700, 
-    transparent: true, 
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xFFD700,
+    transparent: true,
     opacity: 0.5,
-    side: THREE.DoubleSide 
+    side: THREE.DoubleSide
   })
   const ring = new THREE.Mesh(ringGeom, ringMat)
   ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.3
   scene.add(ring)
-  
+
   // Add as unique entity to array
   const treasureEntity = {
     x: x,
@@ -1143,9 +1129,9 @@ function spawnTreasure(x, z, baseGold = 50) {
     collectFade: 1.0,
     gold: baseGold + Math.floor(Math.random() * 50)
   }
-  
+
   treasures.value.push(treasureEntity)
-  
+
   showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
 }
 
@@ -1155,7 +1141,7 @@ function spawnEnemyTreasure(enemy) {
   if (enemy.type === 'RAMMER') baseGold = 125
   else if (enemy.type === 'BIG') baseGold = 150
   else baseGold = 100 // NORMAL
-  
+
   spawnTreasure(enemy.x, enemy.z, baseGold)
 }
 
@@ -1163,35 +1149,35 @@ function spawnEnemyTreasure(enemy) {
 function checkProceduralSpawns() {
   const px = Math.floor(playerPos.value.x / CHUNK_SIZE)
   const pz = Math.floor(playerPos.value.z / CHUNK_SIZE)
-  
+
   // Only check immediate chunks (3x3) on first spawn to avoid massive initial load
   // Expand to 9x9 over time
   const chunkRadius = spawnedChunks.size < 10 ? 1 : (spawnedChunks.size < 30 ? 2 : 4)
-  
+
   // Check chunk grid around player
   for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
     for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
       const cx = px + dx
       const cz = pz + dz
       const key = `${cx},${cz}`
-      
+
       if (!spawnedChunks.has(key)) {
         spawnChunk(cx, cz)
         spawnedChunks.add(key)
       }
     }
   }
-  
+
   // Cleanup distant chunks (beyond 9x9)
   cleanupDistantChunks()
-  
+
   // Ensure kraken is always in loaded chunk
   if (krakenActive && kraken.value) {
     // Check if kraken is in loaded chunk
     const kx = Math.floor(kraken.value.x / CHUNK_SIZE)
     const kz = Math.floor(kraken.value.z / CHUNK_SIZE)
     const dist = Math.sqrt((kx - px) ** 2 + (kz - pz) ** 2)
-    
+
     // If kraken too far or unloaded, spawn new one
     if (dist > 5) {
       // Find a chunk not too close to player
@@ -1207,18 +1193,18 @@ function checkProceduralSpawns() {
           break
         }
       }
-      
+
       // Respawn kraken (find valid position not on islands/rocks)
       let kx, kz, validK
       let kAttempts = 0
-      
+
       do {
         validK = true
         const worldX = newCX * CHUNK_SIZE + CHUNK_SIZE / 2
         const worldZ = newCZ * CHUNK_SIZE + CHUNK_SIZE / 2
         kx = worldX + (Math.random() - 0.5) * 100
         kz = worldZ + (Math.random() - 0.5) * 100
-        
+
         // Check islands
         for (const island of worldObjects.islands) {
           const dx = kx - island.x
@@ -1228,7 +1214,7 @@ function checkProceduralSpawns() {
             break
           }
         }
-        
+
         // Check rocks
         if (validK) {
           for (const rock of worldObjects.rocks) {
@@ -1240,10 +1226,10 @@ function checkProceduralSpawns() {
             }
           }
         }
-        
+
         kAttempts++
       } while (!validK && kAttempts < 10)
-      
+
       kraken.value.x = kx
       kraken.value.z = kz
       if (krakenMesh) {
@@ -1259,10 +1245,10 @@ function checkProceduralSpawns() {
 function spawnChunk(cx, cz) {
   const worldX = cx * CHUNK_SIZE + CHUNK_SIZE / 2
   const worldZ = cz * CHUNK_SIZE + CHUNK_SIZE / 2
-  
+
   // Skip ships in starting chunk (0,0) - spawnEnemyShip handles initial enemies
   const isStartingChunk = (cx === 0 && cz === 0)
-  
+
   // 40% chance of island per chunk, then 1-2 islands
   if (Math.random() < 0.4) {
     const numIslands = 1 + Math.floor(Math.random() * 2)
@@ -1275,7 +1261,7 @@ function spawnChunk(cx, cz) {
       spawnIsland(ix, iz)
     }
   }
-  
+
   // Spawn rocks (3-6 per chunk) - away from borders
   const numRocks = 3 + Math.floor(Math.random() * 4)
   for (let i = 0; i < numRocks; i++) {
@@ -1286,18 +1272,18 @@ function spawnChunk(cx, cz) {
     const rz = worldZ + Math.sin(angle) * dist
     spawnRock(rx, rz)
   }
-  
+
   // Spawn random ships (0-3 ships per chunk) - skip starting chunk
   // Spawn random ships (0-3 ships per chunk) - skip starting chunk
   if (!isStartingChunk) {
     const numShips = Math.random() < 0.3 ? 1 : 0 // 30% chance of 1 ship per chunk
     const chunkShips = []
-    
+
     for (let s = 0; s < numShips; s++) {
       // Try to find a valid position (away from borders and other ships)
       let sx, sz, valid
       let attempts = 0
-      
+
       do {
         valid = true
         const angle = Math.random() * Math.PI * 2
@@ -1306,7 +1292,7 @@ function spawnChunk(cx, cz) {
         const dist = 30 + Math.random() * maxDist
         sx = worldX + Math.cos(angle) * dist
         sz = worldZ + Math.sin(angle) * dist
-        
+
         // Check distance from other ships in this chunk
         for (const other of chunkShips) {
           const dx = sx - other.x
@@ -1316,7 +1302,7 @@ function spawnChunk(cx, cz) {
             break
           }
         }
-        
+
         // Check distance from existing enemies (avoid spawning on top)
         for (const enemy of enemyShips.value) {
           const dx = sx - enemy.x
@@ -1326,7 +1312,7 @@ function spawnChunk(cx, cz) {
             break
           }
         }
-        
+
         // Check distance from islands
         for (const island of worldObjects.islands) {
           const dx = sx - island.x
@@ -1336,7 +1322,7 @@ function spawnChunk(cx, cz) {
             break
           }
         }
-        
+
         // Check distance from rocks
         for (const rock of worldObjects.rocks) {
           const dx = sx - rock.x
@@ -1346,22 +1332,22 @@ function spawnChunk(cx, cz) {
             break
           }
         }
-        
+
         attempts++
       } while (!valid && attempts < 10)
-      
+
       if (valid) {
         chunkShips.push({ x: sx, z: sz })
         spawnRandomShip(sx, sz)
       }
     }
   }
-  
+
   // 15% chance for sunken ship with treasure
   if (!isStartingChunk && Math.random() < 0.15) {
     let sx, sz, validPos
     let attempts = 0
-    
+
     do {
       validPos = true
       const angle = Math.random() * Math.PI * 2
@@ -1369,7 +1355,7 @@ function spawnChunk(cx, cz) {
       const dist = 30 + Math.random() * maxDist
       sx = worldX + Math.cos(angle) * dist
       sz = worldZ + Math.sin(angle) * dist
-      
+
       // Check islands
       for (const island of worldObjects.islands) {
         const dx = sx - island.x
@@ -1379,7 +1365,7 @@ function spawnChunk(cx, cz) {
           break
         }
       }
-      
+
       // Check rocks
       if (validPos) {
         for (const rock of worldObjects.rocks) {
@@ -1391,7 +1377,7 @@ function spawnChunk(cx, cz) {
           }
         }
       }
-      
+
       // Check other ships
       if (validPos) {
         for (const ship of chunkShips) {
@@ -1403,10 +1389,10 @@ function spawnChunk(cx, cz) {
           }
         }
       }
-      
+
       attempts++
     } while (!validPos && attempts < 10)
-    
+
     if (validPos) {
       spawnSunkenShip(sx, sz)
     }
@@ -1415,37 +1401,37 @@ function spawnChunk(cx, cz) {
 
 function spawnIsland(x, z) {
   const islandGroup = new THREE.Group()
-  
+
   // Random island size - bigger islands now
   const islandSize = 20 + Math.random() * 25 // 20-45 radius
   const islandHeight = 6 + islandSize * 0.3
-  
+
   // Sand base - larger cone
   const sandGeom = new THREE.ConeGeometry(islandSize, islandHeight, 8)
   const sandMat = new THREE.MeshPhongMaterial({ color: 0xF4A460 })
   const sand = new THREE.Mesh(sandGeom, sandMat)
   sand.position.y = islandHeight / 2
   islandGroup.add(sand)
-  
+
   // Multiple palm trees for bigger islands
   const numTrees = Math.floor(1 + islandSize / 20)
   for (let t = 0; t < numTrees; t++) {
     const treeX = (Math.random() - 0.5) * islandSize * 0.6
     const treeZ = (Math.random() - 0.5) * islandSize * 0.6
-    
+
     const trunkGeom = new THREE.CylinderGeometry(0.3, 0.4, 5 + islandSize * 0.1)
     const trunkMat = new THREE.MeshPhongMaterial({ color: 0x8B4513 })
     const trunk = new THREE.Mesh(trunkGeom, trunkMat)
     trunk.position.set(treeX, islandHeight / 2 + 2 + islandSize * 0.05, treeZ)
     islandGroup.add(trunk)
-    
+
     const leavesGeom = new THREE.ConeGeometry(3 + islandSize * 0.1, 4 + islandSize * 0.05, 8)
     const leavesMat = new THREE.MeshPhongMaterial({ color: 0x228B22 })
     const leaves = new THREE.Mesh(leavesGeom, leavesMat)
     leaves.position.set(treeX, islandHeight / 2 + 4 + islandSize * 0.1, treeZ)
     islandGroup.add(leaves)
   }
-  
+
   // 30% chance of harbor (bigger dock for bigger islands)
   if (Math.random() < 0.3) {
     const dockLength = 12 + islandSize * 0.4
@@ -1456,7 +1442,7 @@ function spawnIsland(x, z) {
     dock.position.set(islandSize + dockLength / 2, 0.2, 0)
     dock.rotation.y = 0 // Pointing outward from island center
     islandGroup.add(dock)
-    
+
     // Dock posts (along the dock)
     for (let p = 0; p < 3; p++) {
       const postGeom = new THREE.CylinderGeometry(0.2, 0.2, 1.5)
@@ -1464,26 +1450,26 @@ function spawnIsland(x, z) {
       post.position.set(islandSize + 3 + p * 4, 0.9, 0)
       islandGroup.add(post)
     }
-    
+
     // Red circle at dock end (like treasure - player anchors here)
     const dockEndX = islandSize + dockLength
     const dockEndRingGeom = new THREE.RingGeometry(6, 8, 32)
-    const dockEndRingMat = new THREE.MeshBasicMaterial({ 
-      color: 0xff0000, 
-      transparent: true, 
+    const dockEndRingMat = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
       opacity: 0.5,
-      side: THREE.DoubleSide 
+      side: THREE.DoubleSide
     })
     const dockEndRing = new THREE.Mesh(dockEndRingGeom, dockEndRingMat)
     dockEndRing.rotation.x = -Math.PI / 2
     dockEndRing.position.set(dockEndX, 0.2, 0)
     islandGroup.add(dockEndRing)
-    
+
     // Store dock end position for gameplay
     islandGroup.userData.dockEndX = dockEndX
     islandGroup.userData.hasHarbor = true
   }
-  
+
   islandGroup.position.set(x, 0, z)
   scene.add(islandGroup)
   worldObjects.islands.push({ x, z, radius: islandSize, mesh: islandGroup })
@@ -1492,7 +1478,7 @@ function spawnIsland(x, z) {
 function spawnSunkenShip(x, z) {
   // Half-sunk shipwreck - brownish hull tilted
   const shipwreckGroup = new THREE.Group()
-  
+
   // Hull (tilted as if sunk)
   const hullGeom = new THREE.BoxGeometry(3, 1.5, 8)
   const hullMat = new THREE.MeshPhongMaterial({ color: 0x4a3728 }) // Dark brown
@@ -1501,7 +1487,7 @@ function spawnSunkenShip(x, z) {
   hull.rotation.x = 0.3 // Tilt back
   hull.rotation.z = (Math.random() - 0.5) * 0.2
   shipwreckGroup.add(hull)
-  
+
   // Mast sticking out
   const mastGeom = new THREE.CylinderGeometry(0.15, 0.2, 6)
   const mastMat = new THREE.MeshPhongMaterial({ color: 0x3d2817 })
@@ -1509,13 +1495,13 @@ function spawnSunkenShip(x, z) {
   mast.position.set(0, 2, 1)
   mast.rotation.x = -0.4
   shipwreckGroup.add(mast)
-  
+
   shipwreckGroup.position.set(x, 0, z)
   scene.add(shipwreckGroup)
-  
+
   // Spawn treasure at the wreck location
   spawnTreasure(x, z)
-  
+
   // Track for cleanup
   worldObjects.ships = worldObjects.ships || []
   worldObjects.ships.push({ x, z, radius: 5, mesh: shipwreckGroup })
@@ -1535,7 +1521,7 @@ function spawnRandomShip(x, z) {
   const types = ['RAMMER', 'NORMAL', 'BIG']
   const type = types[Math.floor(Math.random() * types.length)]
   const shipType = SHIP_TYPES[type]
-  
+
   const enemy = {
     x, z,
     hp: shipType.hp,
@@ -1546,11 +1532,11 @@ function spawnRandomShip(x, z) {
     sinking: false,
     sinkingTime: 0
   }
-  
+
   const mesh = createEnemyShipMesh(shipType)
   mesh.position.set(x, 0, z)
   scene.add(mesh)
-  
+
   enemyShips.value.push(enemy)
   enemyShipMeshes.push(mesh)
 }
@@ -1558,32 +1544,32 @@ function spawnRandomShip(x, z) {
 function cleanupDistantChunks() {
   const px = playerPos.value.x
   const pz = playerPos.value.z
-  
+
   // Aggressive cleanup: only keep objects within 3 chunks
   const maxDist = CHUNK_SIZE * 3
-  
-  // Clean islands - dispose mesh properly
+
+  // Clean islands - queue mesh for gradual disposal (avoid sync spikes)
   for (let i = worldObjects.islands.length - 1; i >= 0; i--) {
     const island = worldObjects.islands[i]
     const dx = island.x - px
     const dz = island.z - pz
-    if (Math.sqrt(dx*dx + dz*dz) > maxDist) {
-      disposeGroup(island.mesh)
+    if (Math.sqrt(dx*dx + dz*dz) > maxDist || worldObjects.islands.length > MAX_ISLANDS) {
+      queueForDisposal(island.mesh)
       worldObjects.islands.splice(i, 1)
     }
   }
-  
-  // Clean rocks - dispose mesh properly
+
+  // Clean rocks - queue mesh for gradual disposal
   for (let i = worldObjects.rocks.length - 1; i >= 0; i--) {
     const rock = worldObjects.rocks[i]
     const dx = rock.x - px
     const dz = rock.z - pz
-    if (Math.sqrt(dx*dx + dz*dz) > maxDist) {
-      disposeMesh(rock.mesh)
+    if (Math.sqrt(dx*dx + dz*dz) > maxDist || worldObjects.rocks.length > MAX_ROCKS) {
+      queueForDisposal(rock.mesh)
       worldObjects.rocks.splice(i, 1)
     }
   }
-  
+
   // Clean chunk references beyond 4 chunks
   for (const key of [...spawnedChunks]) {
     const [cx, cz] = key.split(',').map(Number)
@@ -1601,7 +1587,7 @@ function updateTreasure(dt) {
   // Loop through all treasure entities (backwards for safe removal)
   for (let i = treasures.value.length - 1; i >= 0; i--) {
     const t = treasures.value[i]
-    
+
     // Handle collected/expired state - fade out and remove
     if (t.collected) {
       t.collectFade -= dt * 2 // Fade out over ~0.5 seconds
@@ -1619,7 +1605,7 @@ function updateTreasure(dt) {
         t.ringMesh.scale.setScalar(Math.max(0.01, t.collectFade))
         t.ringMesh.material.opacity = Math.max(0, t.collectFade)
       }
-      
+
       if (t.collectFade <= 0) {
         // Fully remove and dispose
         if (t.mesh) disposeMesh(t.mesh)
@@ -1630,20 +1616,20 @@ function updateTreasure(dt) {
       // Skip rest of update while fading
       continue
     }
-    
+
     // Update timer
     t.timer -= dt
-    
+
     // Check player distance
     const dx = playerPos.value.x - t.x
     const dz = playerPos.value.z - t.z
     const dist = Math.sqrt(dx * dx + dz * dz)
-    
+
     // Reset timer if player enters zone
     if (dist < 10) {
       t.timer = 60
     }
-    
+
     // Check for collection (only one at a time to prevent spam)
     if (anchorDropped && dist < 10 && treasureCollectTimer <= 0) {
       // Start collecting
@@ -1651,11 +1637,11 @@ function updateTreasure(dt) {
       treasureCollectTimer = 3
       showMessage('💰 Collecting treasure...', 2000)
     }
-    
+
     // Handle collecting state - shrink the ring and count down
     if (t.collecting) {
       treasureCollectTimer -= dt
-      
+
       // Shrink the ring as we collect
       const collectProgress = 1 - (treasureCollectTimer / 3) // 0 to 1 as we collect
       const ringScale = 1 - (collectProgress * 0.9) // Shrink from 1 to 0.1
@@ -1664,13 +1650,13 @@ function updateTreasure(dt) {
         t.ringMesh.material.opacity = 0.5 + collectProgress * 0.4
         t.ringMesh.material.color.setHex(0x00FF00) // Green while collecting
       }
-      
+
       if (treasureCollectTimer <= 0) {
         // Collected!
         const coins = t.gold || 50
         gold.value += coins
         showMessage(`💰 +${coins} Gold!`, 3000)
-        
+
         // Start fade out animation
         t.collected = true
         t.collectFade = 1.0
@@ -1678,7 +1664,7 @@ function updateTreasure(dt) {
         t.collecting = false
       }
     }
-    
+
     // Reset collecting if player moves away
     if (dist >= 10 && t.collecting) {
       t.collecting = false
@@ -1688,7 +1674,7 @@ function updateTreasure(dt) {
         t.ringMesh.scale.setScalar(1)
       }
     }
-    
+
     // Expired treasure - fade out and sink
     if (t.timer <= 0) {
       showMessage('💨 Treasure lost to the sea...', 2000)
@@ -1697,11 +1683,11 @@ function updateTreasure(dt) {
       t.collectFade = 1.0
       t.mesh.userData.sinking = true
     }
-    
+
     // Update mesh positions (world coordinates)
     if (t.mesh) t.mesh.position.set(t.x, 1, t.z)
     if (t.ringMesh) t.ringMesh.position.set(t.x, 0.3, t.z)
-    
+
     // Update ring pulsing
     if (t.ringMesh) {
       const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.2
@@ -1714,7 +1700,7 @@ function updateTreasure(dt) {
 function fireCannon(side) {
   // side: 'port' (left), 'starboard' (right), or 'both'
   const cooldownTime = 1.5 - playerUpgrades.value.cannonSpeed * 0.25
-  
+
   if (side === 'port') {
     if (portCooldown.value > 0) return
     portCooldown.value = cooldownTime
@@ -1725,18 +1711,18 @@ function fireCannon(side) {
     if (cannonCooldown.value > 0) return
     cannonCooldown.value = cooldownTime
   }
-  
+
   const angle = playerAngle
-  
+
   // Determine which side(s) to fire
   let sidesToFire = []
   if (side === 'port') sidesToFire = [-1] // Left
   else if (side === 'starboard') sidesToFire = [1] // Right
   else sidesToFire = [-1, 1] // Both
-  
+
   // Number of cannons per broadside based on upgrade
   const numCannons = 3 + playerUpgrades.value.cannonCount * 2
-  
+
   for (const sideVal of sidesToFire) {
     // Fire cannons with cone spread - count scales with upgrade
     const sidePositions = []
@@ -1750,18 +1736,18 @@ function fireCannon(side) {
       // port: front = forward (+), back = backward (-)
       // starboard: front = forward (+), back = backward (-)
       const coneAngle = sideVal * (1 - i) * (10 * Math.PI / 180) // Mirrored per side
-      
+
       const ballGeometry = new THREE.SphereGeometry(0.35, 8, 8)
       const ballMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 })
       const ball = new THREE.Mesh(ballGeometry, ballMaterial)
-      
+
       const sideOffset = sideVal * 2
       ball.position.set(
         playerPos.value.x + Math.sin(angle) * zOffset + Math.sin(angle + sideVal * Math.PI / 2) * sideOffset,
         2,
         playerPos.value.z + Math.cos(angle) * zOffset + Math.cos(angle + sideVal * Math.PI / 2) * sideOffset
       )
-      
+
       const speed = 40
       // Add cone angle to firing direction
       const fireAngle = angle + sideVal * Math.PI / 2 + coneAngle
@@ -1773,11 +1759,11 @@ function fireCannon(side) {
         isPlayer: true,
         spawnTime: Date.now()
       })
-      
+
       scene.add(ball)
     }
   }
-  
+
   const sideName = side === 'port' ? 'PORT (LEFT)' : (side === 'starboard' ? 'STARBOARD (RIGHT)' : 'BROADSIDE')
   showMessage(`💥 ${sideName} FIRE!`, 1000)
 }
@@ -1791,14 +1777,14 @@ function fireEnemyCannon() {
 
 function fireEnemyCannonMulti(enemy, shipType, enemyIndex) {
   const angle = enemy.angle
-  
+
   if (shipType === SHIP_TYPES.NORMAL) {
     // Normal ship fires 1 cannon straight ahead
     const ballGeom = new THREE.SphereGeometry(0.35, 8, 8)
     const ballMat = new THREE.MeshBasicMaterial({ color: 0x000000 })
     const ball = new THREE.Mesh(ballGeom, ballMat)
     ball.position.set(enemy.x, 2, enemy.z)
-    
+
     const speed = 35
     cannonballs.push({
       mesh: ball,
@@ -1823,7 +1809,7 @@ function fireEnemyCannonMulti(enemy, shipType, enemyIndex) {
           2,
           enemy.z + Math.cos(angle + side * Math.PI / 2) * offset * 2
         )
-        
+
         const speed = 30
         cannonballs.push({
           mesh: ball,
@@ -1848,10 +1834,10 @@ function updateCannonballs(dt) {
     const ball = cannonballs.shift()
     if (ball && ball.mesh) disposeMesh(ball.mesh)
   }
-  
+
   for (let i = cannonballs.length - 1; i >= 0; i--) {
     const ball = cannonballs[i]
-    
+
     // Performance: Cull distant cannonballs
     const distToPlayerSq = (ball.mesh.position.x - playerPos.value.x) ** 2 + (ball.mesh.position.z - playerPos.value.z) ** 2
     if (distToPlayerSq > CANNONBALL_CULL_DIST * CANNONBALL_CULL_DIST) {
@@ -1859,42 +1845,42 @@ function updateCannonballs(dt) {
       cannonballs.splice(i, 1)
       continue
     }
-    
+
     ball.mesh.position.x += ball.vx * dt
     ball.mesh.position.z += ball.vz * dt
     ball.life -= dt
-    
+
     // Check collision with enemies (both player AND enemy cannons can damage enemies)
-    if (ball.isPlayer || ball.isEnemy) { 
+    if (ball.isPlayer || ball.isEnemy) {
       for (let eIndex = 0; eIndex < enemyShips.value.length; eIndex++) {
         const enemy = enemyShips.value[eIndex]
         if (enemy.hp <= 0) continue
-        
+
         // Don't hit yourself (for enemy cannons)
         if (ball.isEnemy && ball.sourceIndex === eIndex) continue
-        
+
         const dx = ball.mesh.position.x - enemy.x
         const dz = ball.mesh.position.z - enemy.z
         const shipType = SHIP_TYPES[enemy.type]
         const hitDist = 6 * shipType.size
-        
+
         if (Math.sqrt(dx * dx + dz * dz) < hitDist) {
           const damage = ball.damage || 10
           enemy.hp -= damage
-          
+
           if (ball.isPlayer) {
             showMessage(`💥 Hit ${shipType.name}!`)
           } else {
             showMessage(`💥 Enemy fire hit ${shipType.name}!`)
           }
-          
+
           disposeMesh(ball.mesh)
           cannonballs.splice(i, 1)
           break // Only hit one enemy
         }
       }
     }
-    
+
     // Check collision with kraken
     if (krakenActive && kraken.value.hp > 0) {
       const dx = ball.mesh.position.x - kraken.value.x
@@ -1911,7 +1897,7 @@ function updateCannonballs(dt) {
         continue
       }
     }
-    
+
     // Check collision with player (from enemy cannons only - not your own!)
     // Add grace period so your own cannons don't hit you
     const age = (Date.now() - ball.spawnTime) / 1000
@@ -1930,7 +1916,7 @@ function updateCannonballs(dt) {
         continue
       }
     }
-    
+
     if (ball.life <= 0) {
       disposeMesh(ball.mesh)
       cannonballs.splice(i, 1)
@@ -1948,13 +1934,13 @@ function onMouseMove(e) {
   if (gameState.value === 'playing') {
     // Very low sensitivity for big ship feel (inverted: right turns right)
     const turnInput = -e.movementX * 0.0003
-    
+
     // Clamp the accumulated turn to maintain sluggish feel
     // Can't push past this limit no matter how far you move mouse
     const maxTurnDelta = 0.008 // Max turn per frame
     turnAccumulator += turnInput
     turnAccumulator = Math.max(-maxTurnDelta, Math.min(maxTurnDelta, turnAccumulator))
-    
+
     mouseDeltaX = turnAccumulator
   }
 }
@@ -2010,7 +1996,7 @@ function onWheel(e) {
   } else {
     cameraMode = Math.max(0, cameraMode - 0.1)
   }
-  
+
   const modeNames = ['🚢 Navigation', '⚔️ Combat']
   const currentMode = cameraMode > 0.5 ? 1 : 0
   showMessage(`📷 ${modeNames[currentMode]} view`, 1500)
@@ -2019,20 +2005,20 @@ function onWheel(e) {
 function onKeyDown(e) {
   if (gameState.value !== 'playing') return
   if (anchorAnimating) return
-  
+
   // A key - toggle anchor
   if (e.key === 'a' || e.key === 'A') {
     anchorAnimating = true
-    
+
     if (!anchorDropped) {
       // Drop anchor
       showMessage('⚓ Dropping anchor...', 1500)
-      
+
       // Create anchor mesh if not exists
       if (!anchorMesh) {
         createAnchor()
       }
-      
+
       // Animate anchor dropping (1 second)
       setTimeout(() => {
         anchorDropped = true
@@ -2045,7 +2031,7 @@ function onKeyDown(e) {
     } else {
       // Raise anchor
       showMessage('⚓ Raising anchor...', 1500)
-      
+
       // Animate anchor raising (1 second)
       setTimeout(() => {
         anchorDropped = false
@@ -2060,21 +2046,21 @@ function onKeyDown(e) {
 function createAnchor() {
   // Simple anchor mesh
   const anchorGroup = new THREE.Group()
-  
+
   // Chain
   const chainGeom = new THREE.CylinderGeometry(0.05, 0.05, 15, 6)
   const chainMat = new THREE.MeshPhongMaterial({ color: 0x333333 })
   const chain = new THREE.Mesh(chainGeom, chainMat)
   chain.position.y = -7.5
   anchorGroup.add(chain)
-  
+
   // Anchor body
   const anchorGeom = new THREE.BoxGeometry(0.8, 0.5, 1)
   const anchorMat = new THREE.MeshPhongMaterial({ color: 0x222222 })
   const anchor = new THREE.Mesh(anchorGeom, anchorMat)
   anchor.position.y = -15
   anchorGroup.add(anchor)
-  
+
   // Arms
   const armGeom = new THREE.BoxGeometry(2, 0.15, 0.15)
   const arm1 = new THREE.Mesh(armGeom, anchorMat)
@@ -2084,7 +2070,7 @@ function createAnchor() {
   arm2.rotation.y = Math.PI / 2
   arm2.position.set(0, -14.5, 0)
   anchorGroup.add(arm2)
-  
+
   anchorGroup.visible = false
   playerShip.add(anchorGroup)
   anchorMesh = anchorGroup
@@ -2095,7 +2081,7 @@ const HARBOUR_RANGE = 15 // Distance to trigger harbour shop
 
 function checkHarbourEntry() {
   if (!anchorDropped) return
-  
+
   for (const island of worldObjects.islands) {
     if (!island.mesh.userData.hasHarbor) continue
     const dockEndX = island.mesh.userData.dockEndX
@@ -2103,7 +2089,7 @@ function checkHarbourEntry() {
     const dx = playerPos.value.x - (island.x + dockEndX)
     const dz = playerPos.value.z - island.z
     const dist = Math.sqrt(dx * dx + dz * dz)
-    
+
     if (dist < HARBOUR_RANGE) {
       shopOpen.value = true
       shopMessage.value = ''
@@ -2120,7 +2106,7 @@ function buyUpgrade(type) {
     cannonSpeed: { 1: 175, 2: 400, 3: 700 },
     maxHpBonus: { 1: 150, 2: 300, 3: 500, 4: 750, 5: 1000 }
   }
-  
+
   if (type === 'repairHaul') {
     const cost = 100 + playerUpgrades.value.repairCount * 10
     if (gold.value < cost) {
@@ -2134,7 +2120,7 @@ function buyUpgrade(type) {
     showShopMessage(`✅ Repaired! +10 HP for ${cost}g`)
     return
   }
-  
+
   if (type === 'maxHpBonus') {
     const current = playerUpgrades.value.maxHpBonus
     if (current >= 5) {
@@ -2154,7 +2140,7 @@ function buyUpgrade(type) {
     showShopMessage(`✅ Max HP +10! Now ${newMaxHp} HP`)
     return
   }
-  
+
   const current = playerUpgrades.value[type]
   if (current >= 3) {
     showShopMessage('⚓ Max level reached!')
@@ -2190,39 +2176,39 @@ function getWindDirection() {
 // Animate sails based on wind
 function animateSails(dt) {
   if (!playerShip || !playerShip.userData.sails) return
-  
+
   const time = Date.now() * 0.001
   const windStrength = windSpeed.value / 6 // Normalize 0-1
-  
+
   // Calculate how aligned we are with wind (1 = perfect tailwind, -1 = perfect headwind)
   const windAlignment = Math.cos(windAngle - playerAngle)
   // Positive = wind behind, Negative = wind in front
   const windBehind = Math.max(0, windAlignment) // 1 when wind behind, 0 when in front
   const windAhead = Math.max(0, -windAlignment) // 1 when wind in front, 0 when behind
-  
+
   // More billowing when going fast with wind, less when slow/against wind
   const speedFactor = playerSpeed.value / 15 // 0 to 1 based on speed
-  
+
   playerShip.userData.sails.forEach((sail, index) => {
     if (!sail.userData.originalVertices || !sail.userData.fixedEdges) return
-    
+
     const positions = sail.geometry.attributes.position
     const original = sail.userData.originalVertices
     const fixedEdges = sail.userData.fixedEdges
-    
+
     for (let i = 0; i < positions.count; i++) {
       // Skip vertices on top and bottom edges (attached to yards)
       if (fixedEdges[i]) continue
-      
+
       const x = original[i * 3] // Horizontal position (-width/2 to +width/2)
       const y = original[i * 3 + 1] // Vertical position
-      
+
       // x ranges from -width/2 to +width/2
       // The sides (left and right edges) are free to billow
       // distFromCenter: 0 at center (x=0), 1 at edges
       const width = 5.5 / 2 // approximate
       const distFromCenter = Math.abs(x) / width
-      
+
       // === WIND BEHIND = FULL BELLY, CURVED SHAPE ===
       // Maximum billow when wind is behind and we're moving fast
       // Billow in X direction (sideways from the mast)
@@ -2230,24 +2216,24 @@ function animateSails(dt) {
       // Curved billow - full in middle, less at corners (parabolic)
       // Only the vertical sides billow, not top/bottom
       const curvedBillow = Math.pow(distFromCenter, 1.5) * maxBillow * 2
-      
+
       // === WIND IN FRONT = FLUTTER, ALMOST NO VOLUME ===
       // Sails luff and flutter when wind is against
       const flutterAmount = windAhead * 0.25 * (0.2 + speedFactor * 0.3)
       const flutter = Math.sin(time * 8 + y * 0.5 + index * 2) * flutterAmount
-      
+
       // Apply billow to X axis (sideways billow)
       // Sign matches x direction so both sides billow outward
       const direction = x >= 0 ? 1 : -1
       positions.array[i * 3] = x + direction * curvedBillow + flutter
     }
-    
+
     positions.needsUpdate = true
   })
-  
+
   // Update wind particles
   updateWindParticles(dt)
-  
+
   // Update treasure
   if (gameState.value === 'playing') {
     updateTreasure(dt)
@@ -2280,7 +2266,7 @@ function createWindParticles() {
     const geometry = new THREE.BufferGeometry()
     const positions = new Float32Array(6) // 2 points per line
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    
+
     const material = new THREE.LineBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -2290,7 +2276,7 @@ function createWindParticles() {
       depthWrite: false,
       renderOrder: 999 // Render on top
     })
-    
+
     const particle = new THREE.Line(geometry, material)
     particle.frustumCulled = false // Never cull
     initWindParticle(particle)
@@ -2312,7 +2298,7 @@ function initWindParticle(particle) {
     swirlPhase: Math.random() * Math.PI * 2,
     swirlSpeed: 1 + Math.random() * 1.5
   }
-  
+
   const pos = particle.geometry.attributes.position.array
   pos[0] = particle.userData.x
   pos[1] = particle.userData.y
@@ -2324,31 +2310,31 @@ function initWindParticle(particle) {
 
 function updateWindParticles(dt) {
   const time = Date.now() * 0.001
-  
+
   // Key fix: particles ALWAYS faster than player ship
   const minSpeed = playerSpeed.value * 1.3 + 3  // Always faster than ship + base
   const windComp = windSpeed.value * 2
   const particleSpeed = Math.max(minSpeed, windComp + 4)
-  
+
   windParticles.forEach(particle => {
     particle.userData.life += dt
-    
+
     // Move in wind direction
     const vx = Math.sin(windAngle) * particleSpeed
     const vz = Math.cos(windAngle) * particleSpeed
-    
+
     // Gentle swirl (leaf-like)
     const swirl = Math.sin(time * particle.userData.swirlSpeed + particle.userData.swirlPhase)
     const swirlX = Math.cos(windAngle + Math.PI/2) * swirl * 0.4
     const swirlZ = Math.sin(windAngle + Math.PI/2) * swirl * 0.4
-    
+
     particle.userData.x += (vx + swirlX) * dt
     particle.userData.z += (vz + swirlZ) * dt
-    
+
     // Bob up/down
     particle.userData.y += Math.sin(time * 2 + particle.userData.swirlPhase) * 0.4 * dt
     particle.userData.y = Math.max(1, Math.min(12, particle.userData.y))
-    
+
     // Trail
     const pos = particle.geometry.attributes.position.array
     pos[0] = particle.userData.x
@@ -2358,16 +2344,16 @@ function updateWindParticles(dt) {
     pos[4] = particle.userData.y
     pos[5] = particle.userData.z - vz * 0.08
     particle.geometry.attributes.position.needsUpdate = true
-    
+
     // Fade
     const life = particle.userData.life / particle.userData.maxLife
     particle.material.opacity = 0.2 * (1 - life)
-    
+
     // Respawn if too old or too far
     const dx = particle.userData.x - playerPos.value.x
     const dz = particle.userData.z - playerPos.value.z
     const dist = Math.sqrt(dx*dx + dz*dz)
-    
+
     if (particle.userData.life > particle.userData.maxLife || dist > 60) {
       initWindParticle(particle)
     }
@@ -2384,7 +2370,7 @@ function checkIslandCollision(x, z, radius) {
       return true
     }
   }
-  
+
   for (const island of worldObjects.islands) {
     const dx = x - island.x
     const dz = z - island.z
@@ -2392,7 +2378,7 @@ function checkIslandCollision(x, z, radius) {
       return true
     }
   }
-  
+
   return false
 }
 
@@ -2405,7 +2391,7 @@ function checkRockCollision(x, z, radius) {
       return true
     }
   }
-  
+
   for (const rock of worldObjects.rocks) {
     const dx = x - rock.x
     const dz = z - rock.z
@@ -2413,7 +2399,7 @@ function checkRockCollision(x, z, radius) {
       return true
     }
   }
-  
+
   return false
 }
 
@@ -2423,12 +2409,12 @@ function hasLineOfSight(x1, z1, x2, z2) {
   const dz = z2 - z1
   const dist = Math.sqrt(dx * dx + dz * dz)
   const steps = Math.ceil(dist / 5) // Check every 5 units
-  
+
   for (let i = 1; i < steps; i++) {
     const t = i / steps
     const checkX = x1 + dx * t
     const checkZ = z1 + dz * t
-    
+
     // Check static islands (legacy)
     for (const island of islands) {
       const idx = checkX - island.x
@@ -2437,7 +2423,7 @@ function hasLineOfSight(x1, z1, x2, z2) {
         return false
       }
     }
-    
+
     // Check procedural islands
     for (const island of worldObjects.islands) {
       const idx = checkX - island.x
@@ -2446,7 +2432,7 @@ function hasLineOfSight(x1, z1, x2, z2) {
         return false
       }
     }
-    
+
     // Check static rocks
     for (const rock of rocks) {
       const rdx = checkX - rock.x
@@ -2455,7 +2441,7 @@ function hasLineOfSight(x1, z1, x2, z2) {
         return false
       }
     }
-    
+
     // Check procedural rocks
     for (const rock of worldObjects.rocks) {
       const rdx = checkX - rock.x
@@ -2465,14 +2451,14 @@ function hasLineOfSight(x1, z1, x2, z2) {
       }
     }
   }
-  
+
   return true
 }
 
 // Fire effect for damaged ships
 function createFire(x, z, isEnemy = false) {
   const fireGroup = new THREE.Group()
-  
+
   // Create multiple flame particles
   const flames = []
   for (let i = 0; i < 5; i++) {
@@ -2493,7 +2479,7 @@ function createFire(x, z, isEnemy = false) {
     flames.push(flame)
     fireGroup.add(flame)
   }
-  
+
   // Add smoke (grey spheres above flames)
   for (let i = 0; i < 3; i++) {
     const smokeGeom = new THREE.SphereGeometry(0.4 + Math.random() * 0.3, 5, 5)
@@ -2513,16 +2499,16 @@ function createFire(x, z, isEnemy = false) {
     flames.push(smoke)
     fireGroup.add(smoke)
   }
-  
+
   fireGroup.position.set(x, 0, z)
   scene.add(fireGroup)
-  
+
   return { mesh: fireGroup, flames }
 }
 
 function updateFireEffects(dt) {
   const time = Date.now() * 0.001
-  
+
   // Player fire
   if (playerFire.value) {
     const hpPercent = hp.value / 100
@@ -2534,7 +2520,7 @@ function updateFireEffects(dt) {
       // Animate flames
       playerFire.value.mesh.position.set(playerPos.value.x, 0, playerPos.value.z)
       const intensity = 1 - (hpPercent / 0.5) // 0 when 50% hp, 1 when 0% hp
-      
+
       for (const flame of playerFire.value.flames) {
         const flicker = Math.sin(time * 10 + flame.userData.phase) * 0.2 * intensity
         flame.scale.setScalar(0.5 + flicker + intensity * 0.5)
@@ -2545,12 +2531,12 @@ function updateFireEffects(dt) {
     // Create fire when damaged
     playerFire.value = createFire(playerPos.value.x, playerPos.value.z)
   }
-  
+
   // Enemy fires
   for (let i = enemyFires.value.length - 1; i >= 0; i--) {
     const fire = enemyFires.value[i]
     const enemy = enemyShips.value.find(e => e === fire.enemy)
-    
+
     if (!enemy || enemy.hp > enemy.maxHp * 0.5) {
       // Remove fire if enemy healed or dead - dispose properly
       disposeGroup(fire.mesh)
@@ -2560,7 +2546,7 @@ function updateFireEffects(dt) {
       fire.mesh.position.set(enemy.x, 0, enemy.z)
       const hpPercent = enemy.hp / enemy.maxHp
       const intensity = 1 - (hpPercent / 0.5)
-      
+
       for (const flame of fire.flames) {
         const flicker = Math.sin(time * 10 + flame.userData.phase) * 0.2 * intensity
         flame.scale.setScalar(0.5 + flicker + intensity * 0.5)
@@ -2568,7 +2554,7 @@ function updateFireEffects(dt) {
       }
     }
   }
-  
+
   // Create fire for damaged enemies
   for (const enemy of enemyShips.value) {
     if (enemy.hp > 0 && enemy.hp < enemy.maxHp * 0.5) {
@@ -2584,13 +2570,12 @@ function updateFireEffects(dt) {
 }
 
 function update(dt) {
-  // Memory sweep every 30 seconds - aggressively clean orphaned objects
-  memorySweepTimer += dt
-  if (memorySweepTimer >= MEMORY_SWPEEP_INTERVAL) {
-    memorySweepTimer = 0
-    forceMemorySweep()
-  }
-  
+  // Gradual per-frame disposal - prevents lag spikes from bulk cleanup
+  processDisposalQueue()
+
+  // Also run cleanup checks (no disposal, just culling references)
+  // Chunk cleanup is handled by the range check below
+
   if (shopOpen.value) {
     // Pause physics when in harbour shop
     // Check if player left harbour zone - auto-close shop
@@ -2613,14 +2598,14 @@ function update(dt) {
     renderer.render(scene, camera)
     return
   }
-  
+
   // Check harbour entry while anchored (player may drift into range)
   if (anchorDropped) {
     checkHarbourEntry()
   }
-  
+
   if (gameState.value !== 'playing') return
-  
+
   // Update wind - more dynamic changes
   windChangeTimer -= dt
   if (windChangeTimer <= 0) {
@@ -2632,21 +2617,21 @@ function update(dt) {
     windChangeTimer = 12 + Math.random() * 5 // Changes every 12-17 seconds
     showMessage(`💨 Wind shifting...`, 2000)
   }
-  
+
   // Gradually transition wind angle (4 second transition)
   const windTransitionSpeed = 0.25 // Complete transition in ~4 seconds
   if (Math.abs(targetWindAngle - windAngle) > 0.01) {
     windAngle += (targetWindAngle - windAngle) * windTransitionSpeed * dt
   }
-  
+
   // Gradually transition wind speed
   if (Math.abs(targetWindSpeed - windSpeed.value) > 0.1) {
     windSpeed.value += (targetWindSpeed - windSpeed.value) * windTransitionSpeed * dt
   }
-  
+
   // Animate sails
   animateSails(dt)
-  
+
   // === GRADUAL STEERING WITH MOUSE ===
   // Add mouse delta to target rotation for easing
   if (mouseDeltaX !== 0) {
@@ -2656,7 +2641,7 @@ function update(dt) {
     // Clear if very small
     if (Math.abs(mouseDeltaX) < 0.0001) mouseDeltaX = 0
   }
-  
+
   // Ease player angle towards target rotation (smooth turning)
   // Big ship takes time to react and turn
   // If anchor is dropped, turn VERY slowly
@@ -2665,14 +2650,14 @@ function update(dt) {
   if (Math.abs(angleDiff) > 0.001) {
     playerAngle += angleDiff * turnSpeed * dt
   }
-  
+
   // === MOMENTUM-BASED SPEED PHYSICS ===
   // Calculate target speed based on wind alignment
   const windDir = Math.cos(windAngle - playerAngle)
   const maxSpeed = 15 + playerUpgrades.value.sailSpeed * 3 // Bonus per sail level
   const minSpeed = 2 // Minimum speed with headwind
   const targetSpeed = minSpeed + (maxSpeed - minSpeed) * Math.max(0, (windDir + 1) / 2)
-  
+
   // Gradually accelerate/decelerate toward target speed (momentum)
   // Big heavy ship takes a long time to speed up and slow down
   // If anchor dropped, no acceleration allowed
@@ -2682,24 +2667,24 @@ function update(dt) {
   } else {
     playerSpeed.value = Math.max(targetSpeed, playerSpeed.value - acceleration * 0.3 * dt)
   }
-  
+
   // Apply momentum to position
   playerPos.value.x += Math.sin(playerAngle) * playerSpeed.value * dt
   playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
-  
+
   // Infinite world - no boundaries, but check for procedural spawns
   checkProceduralSpawns()
-  
+
   // Update ship mesh
   playerShip.position.x = playerPos.value.x
   playerShip.position.z = playerPos.value.z
-  
+
   // Update anchor visibility
   if (anchorMesh) {
     anchorMesh.visible = anchorDropped || anchorAnimating
   }
   playerShip.rotation.y = playerAngle
-  
+
   // Camera follow - interpolate between behind view and top-down based on cameraMode
   // Behind view (navigation): close behind, lower angle
   const behindDist = 50
@@ -2707,20 +2692,20 @@ function update(dt) {
   // Top-down view (combat): high above, looking down
   const topDownDist = 80
   const topDownHeight = 100
-  
+
   // Interpolate based on cameraMode
   let dist = behindDist + (topDownDist - behindDist) * cameraMode
   const height = behindHeight + (topDownHeight - behindHeight) * cameraMode
-  
+
   // Add distance based on speed (camera pulls back when going faster)
   const speedBoost = playerSpeed.value * 1.5
   dist += speedBoost
-  
+
   camera.position.x = playerPos.value.x - Math.sin(playerAngle) * dist
   camera.position.z = playerPos.value.z - Math.cos(playerAngle) * dist
   camera.position.y = height
   camera.lookAt(playerPos.value.x, 5, playerPos.value.z) // Look slightly above water
-  
+
   // Island collision
   for (const island of islands) {
     const dx = playerPos.value.x - island.x
@@ -2730,7 +2715,7 @@ function update(dt) {
       showMessage('🪨 Hit an island!')
     }
   }
-  
+
   // Rock collision
   for (const rock of rocks) {
     const dx = playerPos.value.x - rock.x
@@ -2740,32 +2725,32 @@ function update(dt) {
       showMessage('🪨 Hit a rock!')
     }
   }
-  
+
   if (hp.value <= 0) {
     gameState.value = 'gameover'
     shopOpen.value = false
   }
-  
+
   // === MULTIPLE ENEMY SHIPS AI ===
   // Performance: Throttle AI updates to every 2nd frame
   const aiThrottle = frameCount % 2 === 0
   enemyShips.value.forEach((enemy, index) => {
     if (enemy.hp <= 0) return // Skip destroyed ships
-    
+
     const mesh = enemyShipMeshes[index]
     if (!mesh) return
-    
+
     const shipType = SHIP_TYPES[enemy.type]
-    
+
     // Calculate direction to player
     const dx = playerPos.value.x - enemy.x
     const dz = playerPos.value.z - enemy.z
     const distToPlayerSq = dx * dx + dz * dz
     const distToPlayer = Math.sqrt(distToPlayerSq)
-    
+
     // Skip AI for very distant enemies (already handled above, but double-check)
     if (distToPlayerSq > ACTIVE_DIST * ACTIVE_DIST) return
-    
+
     // Performance: Throttle AI updates
     if (!aiThrottle) {
       mesh.position.x = enemy.x
@@ -2782,13 +2767,13 @@ function update(dt) {
       mesh.rotation.y = enemy.angle
       return
     }
-    
+
     // Within active range - full AI
     mesh.visible = true
-    
+
     // Enemy state machine
     if (!enemy.state) enemy.state = 'IDLE'
-    
+
     // State transitions based on distance
     if (distToPlayer > ENEMY_IDLE_DIST) {
       enemy.state = 'IDLE'
@@ -2797,9 +2782,9 @@ function update(dt) {
     } else {
       enemy.state = 'ATTACKING'
     }
-    
+
     let targetAngle = enemy.angle // Default: keep current direction
-    
+
     // Different behavior based on state
     if (enemy.state === 'IDLE') {
       // Wander randomly, don't chase player
@@ -2815,7 +2800,7 @@ function update(dt) {
     } else {
       // ATTACKING - full chase behavior
       enemy.speedMod = 1.0
-      
+
       if (enemy.type === 'RAMMER') {
         // Rammers charge directly at player
         targetAngle = Math.atan2(dx, dz)
@@ -2848,17 +2833,17 @@ function update(dt) {
         }
       }
     }
-    
+
     // Check for islands ahead only (enemies ignore rocks for avoidance)
     const lookAheadX = enemy.x + Math.sin(enemy.angle) * 15
     const lookAheadZ = enemy.z + Math.cos(enemy.angle) * 15
     const islandAhead = checkIslandCollision(lookAheadX, lookAheadZ, 5)
-    
+
     // 15% chance to not notice obstacle (stupid AI)
     const oblivious = Math.random() < 0.15
-    
+
     let moveAngle = targetAngle
-    
+
     if (islandAhead && !oblivious) {
       const leftCheck = checkIslandCollision(
         enemy.x + Math.sin(enemy.angle + 0.5) * 10,
@@ -2868,31 +2853,31 @@ function update(dt) {
         enemy.x + Math.sin(enemy.angle - 0.5) * 10,
         enemy.z + Math.cos(enemy.angle - 0.5) * 10, 5
       )
-      
+
       // 20% chance to pick wrong direction even if one is clear
       const wrongChoice = Math.random() < 0.2
-      
+
       if (!leftCheck && rightCheck && !wrongChoice) moveAngle = enemy.angle + 0.8 * dt
       else if (!rightCheck && leftCheck && !wrongChoice) moveAngle = enemy.angle - 0.8 * dt
       else if (!leftCheck && !rightCheck) moveAngle = enemy.angle + (Math.random() > 0.5 ? 0.8 : -0.8) * dt
       else moveAngle = enemy.angle + Math.PI
     }
-    
+
     // Smoothly turn toward target
     enemy.angle += (moveAngle - enemy.angle) * dt * shipType.turnSpeed
-    
+
     // Move at speed based on type and state
     let speedMult = enemy.speedMod || 1.0
     if (islandAhead) speedMult *= 0.5
     const enemySpeed = shipType.speed * speedMult
     enemy.x += Math.sin(enemy.angle) * enemySpeed * dt
     enemy.z += Math.cos(enemy.angle) * enemySpeed * dt
-    
+
     // Enemy wake
     if (enemySpeed > 2 && Math.random() < 0.1) {
       spawnWakeParticle(enemy.x, enemy.z, enemy.angle, true)
     }
-    
+
     // Check if enemy hit a rock (takes damage but keeps going sometimes)
     if (checkRockCollision(enemy.x, enemy.z, 3)) {
       enemy.hp -= 5 * dt // Less damage from rocks
@@ -2906,14 +2891,14 @@ function update(dt) {
         showMessage(`💥 ${enemy.type} scraped a rock!`, 1000)
       }
     }
-    
+
     // Infinite world - no boundaries
-    
+
     // Update mesh
     mesh.position.x = enemy.x
     mesh.position.z = enemy.z
     mesh.rotation.y = enemy.angle
-    
+
     // Animate enemy sails
     if (mesh.userData.sails) {
       const time = Date.now() * 0.001
@@ -2932,37 +2917,37 @@ function update(dt) {
         positions.needsUpdate = true
       })
     }
-    
+
     // Collision with player
     const edx = playerPos.value.x - enemy.x
     const edz = playerPos.value.z - enemy.z
     const enemyDist = Math.sqrt(edx * edx + edz * edz)
     const collisionDist = 4 * shipType.size
-    
+
     if (enemyDist < collisionDist + 3) {
       // Rammers deal 2x damage but take little damage
       const damage = enemy.type === 'RAMMER' ? shipType.rammingDamage * 2 : shipType.rammingDamage
       hp.value -= damage * dt
-      
+
       // Rammers are harder to damage from collision
       const enemyDamage = enemy.type === 'RAMMER' ? 2 : 5
       enemy.hp -= enemyDamage
-      
+
       // Bounce back
       enemy.x -= Math.sin(enemy.angle) * 2
       enemy.z -= Math.cos(enemy.angle) * 2
-      
+
       const typeName = enemy.type === 'RAMMER' ? 'Ramming ship' : (enemy.type === 'BIG' ? 'Galleon' : 'Sloop')
       showMessage(`⚔️ Collision with ${typeName}!`)
     }
-    
+
     // Enemy fires only when attacking and in range
     if (enemy.state === 'ATTACKING' || enemy.state === 'ALERT') {
       const now = Date.now()
       // Fire rates - more aggressive
       const fireChance = enemy.type === 'BIG' ? 0.08 : (enemy.type === 'NORMAL' ? 0.1 : 0.15)
       const fireRange = enemy.type === 'NORMAL' ? 45 : 55
-      
+
       if (Math.random() < fireChance && distToPlayer < fireRange && now - enemy.lastShot > 1200) {
         // Check line of sight to player
         if (hasLineOfSight(enemy.x, enemy.z, playerPos.value.x, playerPos.value.z)) {
@@ -2972,45 +2957,45 @@ function update(dt) {
       }
     }
   })
-  
+
   // === ENEMY-ENEMY COLLISION ===
   for (let i = 0; i < enemyShips.value.length; i++) {
     const e1 = enemyShips.value[i]
     if (e1.hp <= 0) continue
     const t1 = SHIP_TYPES[e1.type]
-    
+
     for (let j = i + 1; j < enemyShips.value.length; j++) {
       const e2 = enemyShips.value[j]
       if (e2.hp <= 0) continue
       const t2 = SHIP_TYPES[e2.type]
-      
+
       const dx = e1.x - e2.x
       const dz = e1.z - e2.z
       const dist = Math.sqrt(dx * dx + dz * dz)
       const collisionDist = (4 * t1.size) + (4 * t2.size)
-      
+
       if (dist < collisionDist) {
         // Both take damage
         e1.hp -= 5
         e2.hp -= 5
-        
+
         // Bounce apart
         const angle = Math.atan2(dx, dz)
         e1.x += Math.sin(angle) * 3
         e1.z += Math.cos(angle) * 3
         e2.x -= Math.sin(angle) * 3
         e2.z -= Math.cos(angle) * 3
-        
+
         showMessage('💥 Enemy ships collided!')
       }
     }
   }
-  
+
   // === ENEMY OBSTACLE COLLISION (rocks and islands) ===
   enemyShips.value.forEach((enemy) => {
     if (enemy.hp <= 0) return
     const shipType = SHIP_TYPES[enemy.type]
-    
+
     // Check islands
     for (const island of islands) {
       const dx = enemy.x - island.x
@@ -3024,7 +3009,7 @@ function update(dt) {
         showMessage(`💥 ${shipType.name} hit an island!`)
       }
     }
-    
+
     // Check rocks
     for (const rock of rocks) {
       const dx = enemy.x - rock.x
@@ -3039,7 +3024,7 @@ function update(dt) {
       }
     }
   })
-  
+
   // === SINKING ANIMATION ===
   enemyShips.value.forEach((enemy, index) => {
     if (enemy.hp <= 0 && !enemy.sinking) {
@@ -3049,7 +3034,7 @@ function update(dt) {
       const shipType = SHIP_TYPES[enemy.type]
       showMessage(`💀 ${shipType.name} sinking!`)
     }
-    
+
     if (enemy.sinking) {
       enemy.sinkingTime += dt
       const mesh = enemyShipMeshes[index]
@@ -3061,14 +3046,14 @@ function update(dt) {
       }
     }
   })
-  
+
   // Remove fully sunk enemies
   for (let i = enemyShips.value.length - 1; i >= 0; i--) {
     if (enemyShips.value[i].sinking && enemyShips.value[i].sinkingTime > 3) {
       // Spawn treasure before removing (unique entity each time)
       const enemy = enemyShips.value[i]
       spawnEnemyTreasure(enemy)
-      
+
       // Remove after 3 seconds of sinking - dispose mesh properly
       const mesh = enemyShipMeshes[i]
       if (mesh) disposeGroup(mesh)
@@ -3076,12 +3061,12 @@ function update(dt) {
       enemyShips.value.splice(i, 1)
     }
   }
-  
+
   // Check if all enemies are gone (including sinking)
   if (enemyShips.value.length === 0 && enemyShipMeshes.length === 0 && !krakenActive) {
     gold.value += 200
     showMessage('💰 All enemies destroyed! +200 Gold')
-    
+
     // [KRAKEN DISABLED]
     // setTimeout(() => {
     //   if (gameState.value === 'playing') {
@@ -3089,13 +3074,13 @@ function update(dt) {
     //   }
     // }, 3000)
   }
-  
+
   // Kraken AI
   if (krakenActive && kraken.value.hp > 0) {
     const dx = playerPos.value.x - kraken.value.x
     const dz = playerPos.value.z - kraken.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
-    
+
     // Kraken states: idle (random movement), aggressive (chase player)
     if (dist > 70) {
       // Idle - move randomly
@@ -3116,27 +3101,27 @@ function update(dt) {
         kraken.value.z += (dz / dist) * 3 * dt
       }
     }
-    
+
     // === WHIRLPOOL - Pull player if too close ===
     // Whirlpool zone matches visual (about 25 units)
     if (dist < 25) {
       // Check wind direction relative to player heading
       // Positive = wind behind (tailwind), Negative = headwind
       let windAlignment = Math.cos(windAngle - playerAngle)
-      
+
       // If wind is behind player (±20°), reduce pull or push out
       let pullModifier = 1.0
       if (windAlignment > 0.94) { // Within ±20° of tailwind
         pullModifier = -0.5 // Push OUT of whirlpool
       }
-      
+
       // Stronger pull when closer (within visual circle)
       const pullStrength = (1 - dist / 25) * 2 * pullModifier // Max pull speed of 2
       if (pullStrength !== 0) {
         playerPos.value.x += (kraken.value.x - playerPos.value.x) / dist * pullStrength * dt
         playerPos.value.z += (kraken.value.z - playerPos.value.z) / dist * pullStrength * dt
       }
-      
+
       // Slow player movement in whirlpool - more if sailing against wind
       let slowFactor = 0.95
       if (windAlignment < 0.94 && windAlignment > 0) { // sailing against wind (but not completely)
@@ -3147,33 +3132,33 @@ function update(dt) {
       }
       playerSpeed.value *= slowFactor
     }
-    
+
     // === KRAKEN TENTACLES - Smash attack based on player speed ===
     const time = Date.now() * 0.001
     const anyActive = kraken.value.tentacles.some(t => t.userData.state !== 'idle')
-    
+
     kraken.value.tentacles.forEach((tent, i) => {
       // Update cooldown
       if (tent.userData.smashCooldown > 0 && tent.userData.state === 'idle') {
         tent.userData.smashCooldown -= dt
       }
-      
+
       const tentAngle = tent.userData.angle
       const tentGroup = tent.userData.group
-      
+
       if (tent.userData.state === 'idle') {
         // Gentle wave animation using group rotation
         const wave = Math.sin(time * tent.userData.speed + tent.userData.phase) * 0.15
         tentGroup.rotation.x = wave
         tentGroup.rotation.z = Math.cos(tentAngle) * wave * 0.3
-        
+
         // Check if should attack - player within 35 units
         if (dist < 35 && !anyActive && tent.userData.smashCooldown <= 0) {
           // Calculate hit chance based on speed
           // <5 = 100%, >13 = 0%, linear in between
           let hitChance = 1 - (playerSpeed.value - 5) / 8
           hitChance = Math.max(0, Math.min(1, hitChance))
-          
+
           tent.userData.targetAngle = Math.atan2(dx, dz)
           tent.userData.hitChance = hitChance
           tent.userData.state = 'aiming'
@@ -3184,7 +3169,7 @@ function update(dt) {
         let angleDiff = tent.userData.targetAngle - tentAngle
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
         while (angleDiff < -Math.PI) angleDiff += Math.PI * 2
-        
+
         // Aim quickly
         if (Math.abs(angleDiff) > 0.05) {
           tent.userData.angle += angleDiff * 3 * dt
@@ -3197,7 +3182,7 @@ function update(dt) {
       }
       else if (tent.userData.state === 'smashing') {
         tent.userData.smashDuration += dt
-        
+
         // Smash down animation - 0.4 seconds
         if (tent.userData.smashDuration < 0.4) {
           const progress = tent.userData.smashDuration / 0.4
@@ -3208,17 +3193,17 @@ function update(dt) {
           // Determine if hit based on chance
           const roll = Math.random()
           const isHit = roll < tent.userData.hitChance
-          
+
           // Calculate where tentacle hits
           const hitDist = 35 // Tentacle reaches to about 35 units
           const hitX = kraken.value.x + Math.sin(tent.userData.targetAngle) * hitDist
           const hitZ = kraken.value.z + Math.cos(tent.userData.targetAngle) * hitDist
-          
+
           // Check if player is near hit point
           const pdx = playerPos.value.x - hitX
           const pdz = playerPos.value.z - hitZ
           const playerHitDist = Math.sqrt(pdx * pdx + pdz * pdz)
-          
+
           if (isHit || playerHitDist < 8) {
             // Hit!
             hp.value -= 40
@@ -3235,7 +3220,7 @@ function update(dt) {
       }
       else if (tent.userData.state === 'recovering') {
         tent.userData.recoverDuration += dt
-        
+
         // Rise back up - 0.6 seconds
         if (tent.userData.recoverDuration < 0.6) {
           const progress = tent.userData.recoverDuration / 0.6
@@ -3250,53 +3235,53 @@ function update(dt) {
           tentGroup.rotation.y = 0
         }
       }
-      
+
       // Update group position to follow kraken
       tentGroup.position.x = kraken.value.x
       tentGroup.position.z = kraken.value.z
-      
+
       // Position attached to body (at kraken center)
       tent.position.x = kraken.value.x
       tent.position.z = kraken.value.z
     })
-    
+
     // Update whirlpool rotation
     if (krakenMesh.userData.whirlpool) {
       krakenMesh.userData.whirlpool.rotation.z += dt * 0.5
       const whirlpoolOpacity = dist < 25 ? 0.4 + (1 - dist / 25) * 0.3 : 0.15
       krakenMesh.userData.whirlpool.material.opacity = whirlpoolOpacity
     }
-    
+
     // Performance: Only render kraken mesh within KRAKEN_RENDER_DIST
     const krakenDistToPlayerSq = (kraken.value.x - playerPos.value.x) ** 2 + (kraken.value.z - playerPos.value.z) ** 2
     const krakenVisible = krakenDistToPlayerSq < KRAKEN_RENDER_DIST * KRAKEN_RENDER_DIST
     krakenMesh.visible = krakenVisible
-    
+
     if (krakenVisible) {
       krakenMesh.position.x = kraken.value.x
       krakenMesh.position.z = kraken.value.z
     }
-    
+
     // Body collision
     if (dist < 15) {
       hp.value -= 20 * dt
       showMessage('💀 KRAKEN CONTACT!')
     }
   }
-  
+
   // Update cannonballs
   updateCannonballs(dt)
-  
+
   // Cannon cooldowns
   if (cannonCooldown.value > 0) cannonCooldown.value -= dt
   if (portCooldown.value > 0) portCooldown.value -= dt
   if (starboardCooldown.value > 0) starboardCooldown.value -= dt
-  
+
   // Animate ocean waves
   if (ocean) {
     animateOceanWaves(Date.now() * 0.001)
   }
-  
+
   // === SHIP WAKE TRAIL ===
   // Spawn wake particles based on speed
   if (playerSpeed.value > 1) {
@@ -3307,32 +3292,32 @@ function update(dt) {
     }
   }
   updateWakeParticles(dt)
-  
+
   // Update fire effects on damaged ships
   updateFireEffects(dt)
-  
+
   // === UPDATE ENEMY INDICATORS ===
   updateEnemyIndicators()
 }
 
 function updateEnemyIndicators() {
   const indicators = []
-  
+
   // Check enemy ships
   enemyShips.value.forEach(enemy => {
     const dx = enemy.x - playerPos.value.x
     const dz = enemy.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
-    
+
     // Performance: Only show icons within ICON_RENDER_DIST
     if (dist < ICON_RENDER_DIST && dist > 50) {
       // Calculate angle to enemy
       const angleToEnemy = Math.atan2(dx, dz) - playerAngle
-      
+
       // Convert to screen position (simple approximation)
       const screenX = 50 - Math.sin(angleToEnemy) * 40
       const screenY = 50 - Math.cos(angleToEnemy) * 30
-      
+
       indicators.push({
         x: Math.max(10, Math.min(90, screenX)),
         y: Math.max(10, Math.min(90, screenY)),
@@ -3343,18 +3328,18 @@ function updateEnemyIndicators() {
       })
     }
   })
-  
+
   // Check kraken
   if (krakenActive && kraken.value.hp > 0) {
     const dx = kraken.value.x - playerPos.value.x
     const dz = kraken.value.z - playerPos.value.z
     const dist = Math.sqrt(dx * dx + dz * dz)
-    
+
     if (dist < ACTIVE_DIST) {
       const angleToKraken = Math.atan2(dx, dz) - playerAngle
       const screenX = 50 - Math.sin(angleToKraken) * 40
       const screenY = 50 - Math.cos(angleToKraken) * 30
-      
+
       indicators.push({
         x: Math.max(10, Math.min(90, screenX)),
         y: Math.max(10, Math.min(90, screenY)),
@@ -3364,20 +3349,20 @@ function updateEnemyIndicators() {
       })
     }
   }
-  
+
   enemyIndicators.value = indicators
 }
 
 // Wake particle functions
 function spawnWakeParticle(x, z, angle, isEnemy) {
   const wakeGeom = new THREE.SphereGeometry(0.15, 4, 4)
-  const wakeMat = new THREE.MeshBasicMaterial({ 
-    color: 0xffffff, 
-    transparent: true, 
-    opacity: 0.4 
+  const wakeMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.4
   })
   const wake = new THREE.Mesh(wakeGeom, wakeMat)
-  
+
   // Position behind the ship
   const offset = isEnemy ? 5 : 5
   const sideOffset = (Math.random() - 0.5) * 2 // Random side
@@ -3386,13 +3371,13 @@ function spawnWakeParticle(x, z, angle, isEnemy) {
     0.3,
     z - Math.cos(angle) * offset - Math.sin(angle) * sideOffset
   )
-  
+
   scene.add(wake)
   playerWake.push({
     mesh: wake,
     life: 2 + Math.random() // 2-3 seconds
   })
-  
+
   // Limit particles
   while (playerWake.length > MAX_WAKE_PARTICLES) {
     const old = playerWake.shift()
@@ -3404,13 +3389,13 @@ function updateWakeParticles(dt) {
   for (let i = playerWake.length - 1; i >= 0; i--) {
     const p = playerWake[i]
     p.life -= dt
-    
+
     // Expand and fade
     const scale = 1 + (2 - p.life) * 0.5
     p.mesh.scale.setScalar(scale)
     p.mesh.material.opacity = (p.life / 3) * 0.5
     p.mesh.position.y = 0.3 + Math.sin(Date.now() * 0.005 + i) * 0.2
-    
+
     if (p.life <= 0) {
       disposeMesh(p.mesh)
       playerWake.splice(i, 1)
@@ -3420,11 +3405,11 @@ function updateWakeParticles(dt) {
 
 function animate() {
   animationId = requestAnimationFrame(animate)
-  
+
   const dt = 1 / 60
   frameCount++
   update(dt)
-  
+
   renderer.render(scene, camera)
 }
 
@@ -3437,11 +3422,11 @@ function startGame() {
   turnAccumulator = 0
   targetRotation = 0
   cameraMode = 0 // Reset to behind view
-  
+
   // Reset
   hp.value = 100
   gold.value = 0
-  
+
   // Reset procedural world
   spawnedChunks.clear()
   worldObjects.islands.forEach(i => scene.remove(i.mesh))
@@ -3455,19 +3440,17 @@ function startGame() {
   playerAngle = 0
   targetRotation = 0
   playerSpeed.value = 0
-  
+
   // Reset anchor
   anchorDropped = false
   anchorAnimating = false
   shopOpen.value = false
-  
+
   // Reset upgrades
   playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, maxHpBonus: 0, repairCount: 0 }
-  
-  // Reset memory sweep timer
-  memorySweepTimer = 0
   lastChunkCount = 0
-  
+  disposeQueue = [] // Clear pending disposals
+
   // Clear fire effects
   if (playerFire.value) {
     disposeGroup(playerFire.value.mesh)
@@ -3475,7 +3458,7 @@ function startGame() {
   }
   enemyFires.value.forEach(f => disposeGroup(f.mesh))
   enemyFires.value = []
-  
+
   // Reset treasures - remove all treasure entities with dispose
   treasures.value.forEach(t => {
     if (t.mesh) disposeMesh(t.mesh)
@@ -3483,21 +3466,21 @@ function startGame() {
   })
   treasures.value = []
   treasureCollectTimer = 0
-  
+
   // Clear old enemy references - dispose properly
   enemyShips.value = []
   enemyShipMeshes.forEach(mesh => disposeGroup(mesh))
   enemyShipMeshes = []
-  
+
   // Spawn new enemies
   spawnEnemyShip()
-  
+
   // Spawn kraken at random distant location
   const krakenDist = 150 + Math.random() * 100
   const krakenAngle = Math.random() * Math.PI * 2
   const startX = Math.sin(krakenAngle) * krakenDist
   const startZ = Math.cos(krakenAngle) * krakenDist
-  
+
   if (krakenMesh) {
     scene.remove(krakenMesh)
     krakenMesh = null
@@ -3506,15 +3489,15 @@ function startGame() {
   // krakenActive = true
   // kraken.value = { x: startX, z: startZ, hp: 200, angle: 0, tentacles: [] }
   // createKraken()
-  
+
   // Clear cannonballs - dispose properly
   cannonballs.forEach(b => { if (b && b.mesh) disposeMesh(b.mesh) })
   cannonballs = []
-  
+
   // Clear wake particles - dispose properly
   playerWake.forEach(w => { if (w && w.mesh) disposeMesh(w.mesh) })
   playerWake = []
-  
+
   victory.value = false
   gameState.value = 'playing'
   showMessage('⚔️ Battle commenced!', 3000)
