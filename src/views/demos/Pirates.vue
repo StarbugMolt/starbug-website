@@ -258,7 +258,7 @@ const MAX_ROCKS = 30   // Max rocks to keep loaded
 const MAX_DISPOSE_PER_FRAME = 3 // Spread disposal across frames to avoid lag spikes
 let disposeQueue = [] // Pending { mesh, type } for gradual disposal
 let lastChunkCount = 0
-let lastSpawnCheck = { x: 0, z: 0 } // Throttle procedural spawns
+let spawnCheckFrameCounter = 0
 let lastCleanupTime = 0
 
 // Computed for HUD
@@ -2513,12 +2513,11 @@ function update(dt) {
   playerPos.value.x += Math.sin(playerAngle) * playerSpeed.value * dt
   playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
 
-  // Infinite world - check procedural spawns only when player moved ~50+ units
-  const dx = playerPos.value.x - lastSpawnCheck.x
-  const dz = playerPos.value.z - lastSpawnCheck.z
-  if (dx * dx + dz * dz > 2500) {
+  // Infinite world - check procedural spawns every 20 frames (not every frame)
+  spawnCheckFrameCounter++
+  if (spawnCheckFrameCounter >= 20) {
+    spawnCheckFrameCounter = 0
     checkProceduralSpawns()
-    lastSpawnCheck = { x: playerPos.value.x, z: playerPos.value.z }
   }
 
   // Cleanup distant objects every 2 seconds
@@ -3303,6 +3302,8 @@ function startGame() {
   playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, maxHpBonus: 0, repairCount: 0 }
   lastChunkCount = 0
   disposeQueue = [] // Clear pending disposals
+  spawnCheckFrameCounter = 0
+  lastCleanupTime = 0
 
   // Clear fire effects
   if (playerFire.value) {
