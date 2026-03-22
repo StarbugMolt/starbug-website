@@ -1,20 +1,19 @@
 # Pirates of the Burning Sea — TODO
 
+Full game design: see `src/views/demos/pirates/GAME.md`
+Project rules: see `RULES.md`
+
 ## Bugs
-- [ ] `updateFireEffects()` — currently broken/not working as intended, needs fixing
-- [ ] `updateEnemyIndicators()` — arrows jump every 5 frames, needs smooth CSS transition
+- [ ] `updateFireEffects()` — currently not working as intended
+- [ ] `updateEnemyIndicators()` — arrows jump every 5 frames, needs CSS transition
 
 ## Performance
-- [ ] Indicator CSS transition to smooth the every-5-frame update jump
-- [ ] Consider re-adding ocean waves with GPU shader (not CPU trig math) if performance allows on target hardware
-- [ ] Consider re-adding wind particles with GPU Points + shader if performance allows
+- [ ] Indicator CSS transition so arrows don't jump on 5-frame update
+- [ ] Profile enemy AI loop — runs heavy logic every frame
 
-## Features
-- [ ] Harbour shop — all core functionality implemented
-- [ ] Upgrade system — sail speed, cannon count, cannon speed, max HP, repair haul
-- [ ] Infinite repair cost escalation (+10g per use)
-
-## Known Removed Features (see ARCHIVE comment in Pirates.vue)
-- Ocean wave system — removed due to CPU trig per vertex causing lag
-- Wind particle system — removed for performance
-- Periodic memory sweep (original) — removed due to sync freeze causing lag spikes
+## Future Ideas
+- [ ] GPU-based ocean waves (shader material, not CPU trig)
+- [ ] GPU-based wind particles (Points + shader)
+- [ ] Save/load game state to localStorage
+- [ ] Difficulty selector
+- [ ] Kraken re-enable (currently disabled for perf)
