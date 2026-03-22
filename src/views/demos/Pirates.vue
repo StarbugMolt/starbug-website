@@ -252,13 +252,15 @@ const showShopMessage = (msg) => {
 // Memory management
 const MAX_TREASURES = 10
 const MAX_CANNONBALLS = 40
-const MAX_WAKE_PARTICLES = 50
+const MAX_WAKE_PARTICLES = 35
 const MAX_ISLANDS = 15  // Max islands to keep loaded
 const MAX_ROCKS = 30   // Max rocks to keep loaded
 const MAX_DISPOSE_PER_FRAME = 3 // Spread disposal across frames to avoid lag spikes
 let disposeQueue = [] // Pending { mesh, type } for gradual disposal
 let lastChunkCount = 0
 let spawnCheckFrameCounter = 0
+let fireEffectsFrameCounter = 0
+let indicatorsFrameCounter = 0
 let lastCleanupTime = 0
 
 // Computed for HUD
@@ -3139,16 +3141,18 @@ function update(dt) {
   }
   updateWakeParticles(dt)
 
-  // Update fire effects on damaged ships (throttled to every 0.5s)
-  if (!updateFireEffects._last || Date.now() - updateFireEffects._last > 500) {
+  // Update fire effects on damaged ships (every 5 frames)
+  fireEffectsFrameCounter++
+  if (fireEffectsFrameCounter >= 5) {
+    fireEffectsFrameCounter = 0
     updateFireEffects(dt)
-    updateFireEffects._last = Date.now()
   }
   
-  // === UPDATE ENEMY INDICATORS === (throttled to every 0.5s)
-  if (!updateEnemyIndicators._last || Date.now() - updateEnemyIndicators._last > 500) {
+  // === UPDATE ENEMY INDICATORS === (every 5 frames, smoothed)
+  indicatorsFrameCounter++
+  if (indicatorsFrameCounter >= 5) {
+    indicatorsFrameCounter = 0
     updateEnemyIndicators()
-    updateEnemyIndicators._last = Date.now()
   }
 }
 
@@ -3303,6 +3307,8 @@ function startGame() {
   lastChunkCount = 0
   disposeQueue = [] // Clear pending disposals
   spawnCheckFrameCounter = 0
+  fireEffectsFrameCounter = 0
+  indicatorsFrameCounter = 0
   lastCleanupTime = 0
 
   // Clear fire effects
