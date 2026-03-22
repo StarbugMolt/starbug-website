@@ -68,6 +68,88 @@
       <p>Gold collected: {{ gold }}</p>
       <button @click="startGame">⚔️ SAIL AGAIN</button>
     </div>
+
+    <!-- Harbour Shop Overlay -->
+    <div class="overlay harbour-overlay" v-if="shopOpen">
+      <div class="harbour-title">⚓ PORT SHOP ⚓</div>
+      <div class="harbour-gold">💰 {{ gold }} Gold</div>
+      <div class="harbour-hp">❤️ HP: {{ hp }}/100</div>
+      <div class="shop-upgrades">
+        <!-- Faster Sails -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">💨</div>
+          <div class="upgrade-name">Faster Sails</div>
+          <div class="upgrade-level">Level {{ playerUpgrades.sailSpeed }}/3</div>
+          <div class="upgrade-bonus">
+            {{ playerUpgrades.sailSpeed === 0 ? '+0 max speed' : `+${playerUpgrades.sailSpeed * 3} max speed` }}
+          </div>
+          <button 
+            v-if="playerUpgrades.sailSpeed < 3" 
+            class="upgrade-btn"
+            @click="buyUpgrade('sailSpeed')"
+          >
+            BUY {{ [150, 350, 600][playerUpgrades.sailSpeed] }}g
+          </button>
+          <div v-else class="upgrade-max">MAXED</div>
+        </div>
+        
+        <!-- More Cannons -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">💣</div>
+          <div class="upgrade-name">Broadside Power</div>
+          <div class="upgrade-level">Level {{ playerUpgrades.cannonCount }}/3</div>
+          <div class="upgrade-bonus">
+            {{ playerUpgrades.cannonCount === 0 ? '3 cannons/side' : `${3 + playerUpgrades.cannonCount * 2} cannons/side` }}
+          </div>
+          <button 
+            v-if="playerUpgrades.cannonCount < 3" 
+            class="upgrade-btn"
+            @click="buyUpgrade('cannonCount')"
+          >
+            BUY {{ [200, 450, 750][playerUpgrades.cannonCount] }}g
+          </button>
+          <div v-else class="upgrade-max">MAXED</div>
+        </div>
+        
+        <!-- Faster Cannons -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">⚡</div>
+          <div class="upgrade-name">Faster Cannons</div>
+          <div class="upgrade-level">Level {{ playerUpgrades.cannonSpeed }}/3</div>
+          <div class="upgrade-bonus">
+            {{ playerUpgrades.cannonSpeed === 0 ? '1.5s cooldown' : `${(1.5 - playerUpgrades.cannonSpeed * 0.25).toFixed(2)}s cooldown` }}
+          </div>
+          <button 
+            v-if="playerUpgrades.cannonSpeed < 3" 
+            class="upgrade-btn"
+            @click="buyUpgrade('cannonSpeed')"
+          >
+            BUY {{ [175, 400, 700][playerUpgrades.cannonSpeed] }}g
+          </button>
+          <div v-else class="upgrade-max">MAXED</div>
+        </div>
+        
+        <!-- Repair Haul -->
+        <div class="upgrade-card repair-card">
+          <div class="upgrade-icon">🔧</div>
+          <div class="upgrade-name">Repair Haul</div>
+          <div class="upgrade-level">{{ playerUpgrades.repairHaul > 0 ? 'OWNED' : 'One-time purchase' }}</div>
+          <div class="upgrade-bonus">Restore 10 HP for 100g</div>
+          <button 
+            v-if="playerUpgrades.repairHaul === 0" 
+            class="upgrade-btn repair-btn"
+            @click="buyUpgrade('repairHaul')"
+          >
+            BUY 100g
+          </button>
+          <div v-else class="upgrade-owned">✅ READY</div>
+        </div>
+      </div>
+      
+      <div class="shop-message" v-if="shopMessage">{{ shopMessage }}</div>
+      <button class="leave-btn" @click="closeShop">⚓ SET SAIL</button>
+      <div class="shop-hint">Press A to raise anchor and sail</div>
+    </div>
   </div>
 </template>
 
@@ -97,6 +179,28 @@ const treasures = ref([]) // Array of treasure entities { x, z, mesh, ringMesh, 
 let treasureCollectTimer = 0
 const message = ref('')
 const enemyIndicators = ref([]) // For directional indicators
+
+// Harbour / Shop system
+const shopOpen = ref(false)
+const playerUpgrades = ref({
+  sailSpeed: 0,   // +1-3 = faster sails (extra speed bonus)
+  cannonCount: 0, // +1-3 = more cannons per broadside
+  cannonSpeed: 0, // +1-3 = faster reload
+  repairHaul: 0   // +1 = one-time use repair 10 HP for 100 gold
+})
+const shopMessage = ref('')
+const showShopMessage = (msg) => {
+  shopMessage.value = msg
+  setTimeout(() => { if (shopMessage.value === msg) shopMessage.value = '' }, 2500)
+}
+
+// Memory management
+const MEMORY_SWPEEP_INTERVAL = 30 // seconds between forced cleanups
+const MAX_TREASURES = 10
+const MAX_CANNONBALLS = 40
+const MAX_WAKE_PARTICLES = 50
+let memorySweepTimer = 0
+let lastChunkCount = 0
 
 // Computed for HUD
 const aliveEnemies = computed(() => enemyShips.value.filter(e => e.hp > 0).length)
@@ -167,6 +271,67 @@ const showMessage = (msg, duration = 3000) => {
   setTimeout(() => {
     if (message.value === msg) message.value = ''
   }, duration)
+}
+
+// === MEMORY MANAGEMENT ===
+function disposeMesh(mesh) {
+  if (!mesh) return
+  if (mesh.geometry) {
+    mesh.geometry.dispose()
+  }
+  if (mesh.material) {
+    if (Array.isArray(mesh.material)) {
+      mesh.material.forEach(m => { if (m.map) m.map.dispose(); m.dispose() })
+    } else {
+      if (mesh.material.map) mesh.material.map.dispose()
+      mesh.material.dispose()
+    }
+  }
+  scene.remove(mesh)
+}
+
+function disposeGroup(group) {
+  if (!group) return
+  group.traverse(child => {
+    if (child.isMesh) disposeMesh(child)
+  })
+  scene.remove(group)
+}
+
+// Periodic JIT memory cleanup - called every 30 seconds
+function forceMemorySweep() {
+  // Cull excess cannonballs
+  while (cannonballs.length > MAX_CANNONBALLS) {
+    const ball = cannonballs.shift()
+    if (ball && ball.mesh) {
+      disposeMesh(ball.mesh)
+    }
+  }
+  
+  // Cull excess wake particles
+  while (playerWake.length > MAX_WAKE_PARTICLES) {
+    const wake = playerWake.shift()
+    if (wake && wake.mesh) disposeMesh(wake.mesh)
+  }
+  
+  // Cull excess treasures (keep most recent)
+  while (treasures.value.length > MAX_TREASURES) {
+    const t = treasures.value.shift()
+    if (t) {
+      if (t.mesh) disposeMesh(t.mesh)
+      if (t.ringMesh) disposeMesh(t.ringMesh)
+    }
+  }
+  
+  // Force chunk cleanup check
+  cleanupDistantChunks()
+  
+  // Log if chunk count growing (memory leak indicator)
+  const chunkCount = spawnedChunks.size
+  if (chunkCount > lastChunkCount + 5) {
+    console.warn(`[MEMORY] Chunk count jumped: ${lastChunkCount} -> ${chunkCount}`)
+  }
+  lastChunkCount = chunkCount
 }
 
 function init() {
@@ -922,6 +1087,15 @@ function createKraken() {
 
 // Treasure functions
 function spawnTreasure(x, z, baseGold = 50) {
+  // Hard cap on treasures - remove oldest if at limit
+  if (treasures.value.length >= MAX_TREASURES) {
+    const old = treasures.value.shift()
+    if (old) {
+      if (old.mesh) disposeMesh(old.mesh)
+      if (old.ringMesh) disposeMesh(old.ringMesh)
+    }
+  }
+  
   // Treasure chest
   const chestGeom = new THREE.BoxGeometry(1.5, 1, 1)
   const chestMat = new THREE.MeshPhongMaterial({ color: 0xFFD700 }) // Gold
@@ -1370,39 +1544,39 @@ function cleanupDistantChunks() {
   const px = playerPos.value.x
   const pz = playerPos.value.z
   
-  // Only cleanup objects beyond 5 chunks (keep more loaded)
-  const maxDist = CHUNK_SIZE * 5
+  // Aggressive cleanup: only keep objects within 3 chunks
+  const maxDist = CHUNK_SIZE * 3
   
-  // Clean islands
+  // Clean islands - dispose mesh properly
   for (let i = worldObjects.islands.length - 1; i >= 0; i--) {
     const island = worldObjects.islands[i]
     const dx = island.x - px
     const dz = island.z - pz
     if (Math.sqrt(dx*dx + dz*dz) > maxDist) {
-      scene.remove(island.mesh)
+      disposeGroup(island.mesh)
       worldObjects.islands.splice(i, 1)
     }
   }
   
-  // Clean rocks
+  // Clean rocks - dispose mesh properly
   for (let i = worldObjects.rocks.length - 1; i >= 0; i--) {
     const rock = worldObjects.rocks[i]
     const dx = rock.x - px
     const dz = rock.z - pz
     if (Math.sqrt(dx*dx + dz*dz) > maxDist) {
-      scene.remove(rock.mesh)
+      disposeMesh(rock.mesh)
       worldObjects.rocks.splice(i, 1)
     }
   }
   
-  // Clean chunk references beyond 6 chunks
-  for (const key of spawnedChunks) {
+  // Clean chunk references beyond 4 chunks
+  for (const key of [...spawnedChunks]) {
     const [cx, cz] = key.split(',').map(Number)
     const wx = cx * CHUNK_SIZE + CHUNK_SIZE / 2
     const wz = cz * CHUNK_SIZE + CHUNK_SIZE / 2
     const dx = wx - px
     const dz = wz - pz
-    if (Math.sqrt(dx*dx + dz*dz) > CHUNK_SIZE * 6) {
+    if (Math.sqrt(dx*dx + dz*dz) > CHUNK_SIZE * 4) {
       spawnedChunks.delete(key)
     }
   }
@@ -1432,17 +1606,9 @@ function updateTreasure(dt) {
       }
       
       if (t.collectFade <= 0) {
-        // Fully remove
-        if (t.mesh) {
-          scene.remove(t.mesh)
-          t.mesh.geometry?.dispose()
-          t.mesh.material?.dispose()
-        }
-        if (t.ringMesh) {
-          scene.remove(t.ringMesh)
-          t.ringMesh.geometry?.dispose()
-          t.ringMesh.material?.dispose()
-        }
+        // Fully remove and dispose
+        if (t.mesh) disposeMesh(t.mesh)
+        if (t.ringMesh) disposeMesh(t.ringMesh)
         treasures.value.splice(i, 1)
         continue
       }
@@ -1532,7 +1698,7 @@ function updateTreasure(dt) {
 
 function fireCannon(side) {
   // side: 'port' (left), 'starboard' (right), or 'both'
-  const cooldownTime = 1.5
+  const cooldownTime = 1.5 - playerUpgrades.value.cannonSpeed * 0.25
   
   if (side === 'port') {
     if (portCooldown.value > 0) return
@@ -1553,9 +1719,15 @@ function fireCannon(side) {
   else if (side === 'starboard') sidesToFire = [1] // Right
   else sidesToFire = [-1, 1] // Both
   
+  // Number of cannons per broadside based on upgrade
+  const numCannons = 3 + playerUpgrades.value.cannonCount * 2
+  
   for (const sideVal of sidesToFire) {
-    // Fire 3 cannons from this side with cone spread
-    const sidePositions = [-2, 0, 2] // front, middle, back
+    // Fire cannons with cone spread - count scales with upgrade
+    const sidePositions = []
+    for (let c = 0; c < numCannons; c++) {
+      sidePositions.push(-2 + (4 / (numCannons - 1 || 1)) * c)
+    }
     for (let i = 0; i < sidePositions.length; i++) {
       const zOffset = sidePositions[i]
       // Calculate cone angle: front cannon fires forward, back fires backward
@@ -1656,13 +1828,19 @@ function fireEnemyCannonMulti(enemy, shipType, enemyIndex) {
 }
 
 function updateCannonballs(dt) {
+  // Hard cap enforcement - remove oldest if over limit
+  while (cannonballs.length > MAX_CANNONBALLS) {
+    const ball = cannonballs.shift()
+    if (ball && ball.mesh) disposeMesh(ball.mesh)
+  }
+  
   for (let i = cannonballs.length - 1; i >= 0; i--) {
     const ball = cannonballs[i]
     
     // Performance: Cull distant cannonballs
     const distToPlayerSq = (ball.mesh.position.x - playerPos.value.x) ** 2 + (ball.mesh.position.z - playerPos.value.z) ** 2
     if (distToPlayerSq > CANNONBALL_CULL_DIST * CANNONBALL_CULL_DIST) {
-      scene.remove(ball.mesh)
+      disposeMesh(ball.mesh)
       cannonballs.splice(i, 1)
       continue
     }
@@ -1695,7 +1873,7 @@ function updateCannonballs(dt) {
             showMessage(`💥 Enemy fire hit ${shipType.name}!`)
           }
           
-          scene.remove(ball.mesh)
+          disposeMesh(ball.mesh)
           cannonballs.splice(i, 1)
           break // Only hit one enemy
         }
@@ -1713,7 +1891,7 @@ function updateCannonballs(dt) {
           victory.value = true
           gameState.value = 'gameover'
         }
-        scene.remove(ball.mesh)
+        disposeMesh(ball.mesh)
         cannonballs.splice(i, 1)
         continue
       }
@@ -1729,7 +1907,7 @@ function updateCannonballs(dt) {
         const damage = ball.damage || 10
         hp.value -= damage
         showMessage('💥 You were hit!')
-        scene.remove(ball.mesh)
+        disposeMesh(ball.mesh)
         cannonballs.splice(i, 1)
         if (hp.value <= 0) {
           gameState.value = 'gameover'
@@ -1739,7 +1917,7 @@ function updateCannonballs(dt) {
     }
     
     if (ball.life <= 0) {
-      scene.remove(ball.mesh)
+      disposeMesh(ball.mesh)
       cannonballs.splice(i, 1)
     }
   }
@@ -1846,6 +2024,8 @@ function onKeyDown(e) {
         anchorAnimating = false
         playerSpeed.value = 0 // Stop forward momentum
         showMessage('⚓ Anchor dropped!', 1500)
+        // Check if near a harbour
+        checkHarbourEntry()
       }, 1000)
     } else {
       // Raise anchor
@@ -1893,6 +2073,73 @@ function createAnchor() {
   anchorGroup.visible = false
   playerShip.add(anchorGroup)
   anchorMesh = anchorGroup
+}
+
+// === HARBOUR SYSTEM ===
+const HARBOUR_RANGE = 15 // Distance to trigger harbour shop
+
+function checkHarbourEntry() {
+  if (!anchorDropped) return
+  
+  for (const island of worldObjects.islands) {
+    if (!island.mesh.userData.hasHarbor) continue
+    const dockEndX = island.mesh.userData.dockEndX
+    // Dock extends along +X from island center
+    const dx = playerPos.value.x - (island.x + dockEndX)
+    const dz = playerPos.value.z - island.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    
+    if (dist < HARBOUR_RANGE) {
+      shopOpen.value = true
+      shopMessage.value = ''
+      showMessage('🏴‍☠️ Welcome to port!', 3000)
+      return
+    }
+  }
+}
+
+function buyUpgrade(type) {
+  const costs = {
+    sailSpeed: { 1: 150, 2: 350, 3: 600 },
+    cannonCount: { 1: 200, 2: 450, 3: 750 },
+    cannonSpeed: { 1: 175, 2: 400, 3: 700 },
+    repairHaul: 100
+  }
+  
+  if (type === 'repairHaul') {
+    if (playerUpgrades.value.repairHaul > 0) {
+      showShopMessage('⚓ Repair haul already purchased!')
+      return
+    }
+    if (gold.value < costs.repairHaul) {
+      showShopMessage('💰 Not enough gold! Need 100')
+      return
+    }
+    gold.value -= costs.repairHaul
+    playerUpgrades.value.repairHaul++
+    showShopMessage('✅ Repair haul purchased! +10 HP for 100 gold')
+    hp.value = Math.min(100, hp.value + 10)
+    return
+  }
+  
+  const current = playerUpgrades.value[type]
+  if (current >= 3) {
+    showShopMessage('⚓ Max level reached!')
+    return
+  }
+  const nextLevel = current + 1
+  const cost = costs[type][nextLevel]
+  if (gold.value < cost) {
+    showShopMessage(`💰 Not enough gold! Need ${cost}`)
+    return
+  }
+  gold.value -= cost
+  playerUpgrades.value[type] = nextLevel
+  showShopMessage(`✅ Upgraded ${type} to level ${nextLevel}!`)
+}
+
+function closeShop() {
+  shopOpen.value = false
 }
 
 function onResize() {
@@ -2247,8 +2494,8 @@ function updateFireEffects(dt) {
   if (playerFire.value) {
     const hpPercent = hp.value / 100
     if (hpPercent > 0.5) {
-      // Remove fire if health restored
-      scene.remove(playerFire.value.mesh)
+      // Remove fire if health restored - dispose properly
+      disposeGroup(playerFire.value.mesh)
       playerFire.value = null
     } else {
       // Animate flames
@@ -2272,8 +2519,8 @@ function updateFireEffects(dt) {
     const enemy = enemyShips.value.find(e => e === fire.enemy)
     
     if (!enemy || enemy.hp > enemy.maxHp * 0.5) {
-      // Remove fire if enemy healed or dead
-      scene.remove(fire.mesh)
+      // Remove fire if enemy healed or dead - dispose properly
+      disposeGroup(fire.mesh)
       enemyFires.value.splice(i, 1)
     } else {
       // Animate flames
@@ -2304,6 +2551,41 @@ function updateFireEffects(dt) {
 }
 
 function update(dt) {
+  // Memory sweep every 30 seconds - aggressively clean orphaned objects
+  memorySweepTimer += dt
+  if (memorySweepTimer >= MEMORY_SWPEEP_INTERVAL) {
+    memorySweepTimer = 0
+    forceMemorySweep()
+  }
+  
+  if (shopOpen.value) {
+    // Pause physics when in harbour shop
+    // Check if player left harbour zone - auto-close shop
+    if (!anchorDropped) {
+      shopOpen.value = false
+    } else {
+      let stillInHarbour = false
+      for (const island of worldObjects.islands) {
+        if (!island.mesh.userData.hasHarbor) continue
+        const dockEndX = island.mesh.userData.dockEndX
+        const dx = playerPos.value.x - (island.x + dockEndX)
+        const dz = playerPos.value.z - island.z
+        if (Math.sqrt(dx * dx + dz * dz) < HARBOUR_RANGE) {
+          stillInHarbour = true
+          break
+        }
+      }
+      if (!stillInHarbour) shopOpen.value = false
+    }
+    renderer.render(scene, camera)
+    return
+  }
+  
+  // Check harbour entry while anchored (player may drift into range)
+  if (anchorDropped) {
+    checkHarbourEntry()
+  }
+  
   if (gameState.value !== 'playing') return
   
   // Update wind - more dynamic changes
@@ -2354,7 +2636,7 @@ function update(dt) {
   // === MOMENTUM-BASED SPEED PHYSICS ===
   // Calculate target speed based on wind alignment
   const windDir = Math.cos(windAngle - playerAngle)
-  const maxSpeed = 15 // Maximum speed with perfect tailwind
+  const maxSpeed = 15 + playerUpgrades.value.sailSpeed * 3 // Bonus per sail level
   const minSpeed = 2 // Minimum speed with headwind
   const targetSpeed = minSpeed + (maxSpeed - minSpeed) * Math.max(0, (windDir + 1) / 2)
   
@@ -2428,6 +2710,7 @@ function update(dt) {
   
   if (hp.value <= 0) {
     gameState.value = 'gameover'
+    shopOpen.value = false
   }
   
   // === MULTIPLE ENEMY SHIPS AI ===
@@ -2753,9 +3036,9 @@ function update(dt) {
       const enemy = enemyShips.value[i]
       spawnEnemyTreasure(enemy)
       
-      // Remove after 3 seconds of sinking
+      // Remove after 3 seconds of sinking - dispose mesh properly
       const mesh = enemyShipMeshes[i]
-      if (mesh) scene.remove(mesh)
+      if (mesh) disposeGroup(mesh)
       enemyShipMeshes.splice(i, 1)
       enemyShips.value.splice(i, 1)
     }
@@ -3078,9 +3361,9 @@ function spawnWakeParticle(x, z, angle, isEnemy) {
   })
   
   // Limit particles
-  while (playerWake.length > maxWakeParticles) {
+  while (playerWake.length > MAX_WAKE_PARTICLES) {
     const old = playerWake.shift()
-    scene.remove(old.mesh)
+    if (old && old.mesh) disposeMesh(old.mesh)
   }
 }
 
@@ -3096,7 +3379,7 @@ function updateWakeParticles(dt) {
     p.mesh.position.y = 0.3 + Math.sin(Date.now() * 0.005 + i) * 0.2
     
     if (p.life <= 0) {
-      scene.remove(p.mesh)
+      disposeMesh(p.mesh)
       playerWake.splice(i, 1)
     }
   }
@@ -3143,34 +3426,34 @@ function startGame() {
   // Reset anchor
   anchorDropped = false
   anchorAnimating = false
+  shopOpen.value = false
+  
+  // Reset upgrades
+  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, repairHaul: 0 }
+  
+  // Reset memory sweep timer
+  memorySweepTimer = 0
+  lastChunkCount = 0
   
   // Clear fire effects
   if (playerFire.value) {
-    scene.remove(playerFire.value.mesh)
+    disposeGroup(playerFire.value.mesh)
     playerFire.value = null
   }
-  enemyFires.value.forEach(f => scene.remove(f.mesh))
+  enemyFires.value.forEach(f => disposeGroup(f.mesh))
   enemyFires.value = []
   
-  // Reset treasures - remove all treasure entities
+  // Reset treasures - remove all treasure entities with dispose
   treasures.value.forEach(t => {
-    if (t.mesh) {
-      scene.remove(t.mesh)
-      t.mesh.geometry?.dispose()
-      t.mesh.material?.dispose()
-    }
-    if (t.ringMesh) {
-      scene.remove(t.ringMesh)
-      t.ringMesh.geometry?.dispose()
-      t.ringMesh.material?.dispose()
-    }
+    if (t.mesh) disposeMesh(t.mesh)
+    if (t.ringMesh) disposeMesh(t.ringMesh)
   })
   treasures.value = []
   treasureCollectTimer = 0
   
-  // Clear old enemy references
+  // Clear old enemy references - dispose properly
   enemyShips.value = []
-  enemyShipMeshes.forEach(mesh => scene.remove(mesh))
+  enemyShipMeshes.forEach(mesh => disposeGroup(mesh))
   enemyShipMeshes = []
   
   // Spawn new enemies
@@ -3191,12 +3474,12 @@ function startGame() {
   // kraken.value = { x: startX, z: startZ, hp: 200, angle: 0, tentacles: [] }
   // createKraken()
   
-  // Clear cannonballs
-  cannonballs.forEach(b => scene.remove(b.mesh))
+  // Clear cannonballs - dispose properly
+  cannonballs.forEach(b => { if (b && b.mesh) disposeMesh(b.mesh) })
   cannonballs = []
   
-  // Clear wake particles
-  playerWake.forEach(w => scene.remove(w.mesh))
+  // Clear wake particles - dispose properly
+  playerWake.forEach(w => { if (w && w.mesh) disposeMesh(w.mesh) })
   playerWake = []
   
   victory.value = false
@@ -3390,5 +3673,156 @@ canvas {
 .overlay button:hover {
   background: #a00000;
   transform: scale(1.05);
+}
+
+/* === HARBOUR SHOP === */
+.harbour-overlay {
+  background: rgba(10, 20, 40, 0.92) !important;
+}
+
+.harbour-title {
+  font-size: 2.8rem;
+  color: #ffd700;
+  text-shadow: 2px 2px 4px #000;
+  margin-bottom: 0.5rem;
+  letter-spacing: 4px;
+}
+
+.harbour-gold {
+  font-size: 1.8rem;
+  color: #ffd700;
+  margin-bottom: 0.25rem;
+}
+
+.harbour-hp {
+  font-size: 1.2rem;
+  color: #ff8888;
+  margin-bottom: 1.5rem;
+}
+
+.shop-upgrades {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  max-width: 700px;
+  width: 90%;
+  margin-bottom: 1rem;
+}
+
+.upgrade-card {
+  background: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,215,0,0.4);
+  border-radius: 12px;
+  padding: 1rem 1.2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.2s;
+}
+
+.upgrade-card:hover {
+  background: rgba(255,215,0,0.12);
+  border-color: rgba(255,215,0,0.7);
+}
+
+.repair-card {
+  border-color: rgba(0,200,100,0.4);
+}
+
+.repair-card:hover {
+  border-color: rgba(0,200,100,0.8);
+}
+
+.upgrade-icon {
+  font-size: 2.5rem;
+}
+
+.upgrade-name {
+  font-size: 1.1rem;
+  color: #ffd700;
+  font-weight: bold;
+}
+
+.upgrade-level {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.upgrade-bonus {
+  font-size: 0.9rem;
+  color: #88ff88;
+  margin-bottom: 0.3rem;
+}
+
+.upgrade-btn {
+  padding: 0.4rem 1.2rem;
+  font-size: 0.9rem;
+  background: #8B0000;
+  color: #fff;
+  border: 1px solid #ffd700;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.upgrade-btn:hover {
+  background: #a00000;
+  transform: scale(1.05);
+}
+
+.repair-btn {
+  background: #006644;
+  border-color: #00cc88;
+}
+
+.repair-btn:hover {
+  background: #008855;
+}
+
+.upgrade-max {
+  color: #ffd700;
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 0.3rem;
+}
+
+.upgrade-owned {
+  color: #00ff88;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.shop-message {
+  font-size: 1.1rem;
+  color: #88ff88;
+  margin-bottom: 0.5rem;
+  min-height: 1.5rem;
+  text-align: center;
+}
+
+.leave-btn {
+  padding: 0.8rem 2.5rem;
+  font-size: 1.3rem;
+  background: #1a4a1a;
+  color: #88ff88;
+  border: 2px solid #00cc44;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.leave-btn:hover {
+  background: #226622;
+  transform: scale(1.05);
+}
+
+.shop-hint {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
 }
 </style>
