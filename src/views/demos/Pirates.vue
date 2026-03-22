@@ -134,12 +134,12 @@
           <div class="upgrade-icon">🔧</div>
           <div class="upgrade-name">Repair Haul</div>
           <div class="upgrade-level">∞ Infinite</div>
-          <div class="upgrade-bonus">Restore 10 HP for 100g</div>
+          <div class="upgrade-bonus">Restore 10 HP for {{ 100 + playerUpgrades.repairCount * 10 }}g</div>
           <button 
             class="upgrade-btn repair-btn"
             @click="buyUpgrade('repairHaul')"
           >
-            BUY 100g
+            BUY {{ 100 + playerUpgrades.repairCount * 10 }}g
           </button>
         </div>
 
@@ -200,7 +200,8 @@ const playerUpgrades = ref({
   sailSpeed: 0,   // +1-3 = faster sails (extra speed bonus)
   cannonCount: 0, // +1-3 = more cannons per broadside
   cannonSpeed: 0, // +1-3 = faster reload
-  maxHpBonus: 0  // +10 max HP per level
+  maxHpBonus: 0,  // +10 max HP per level
+  repairCount: 0  // times repair used (increases cost by 10 each time)
 })
 const shopMessage = ref('')
 const showShopMessage = (msg) => {
@@ -2117,19 +2118,20 @@ function buyUpgrade(type) {
     sailSpeed: { 1: 150, 2: 350, 3: 600 },
     cannonCount: { 1: 200, 2: 450, 3: 750 },
     cannonSpeed: { 1: 175, 2: 400, 3: 700 },
-    repairHaul: 100,
     maxHpBonus: { 1: 150, 2: 300, 3: 500, 4: 750, 5: 1000 }
   }
   
   if (type === 'repairHaul') {
-    if (gold.value < costs.repairHaul) {
-      showShopMessage('💰 Not enough gold! Need 100')
+    const cost = 100 + playerUpgrades.value.repairCount * 10
+    if (gold.value < cost) {
+      showShopMessage(`💰 Not enough gold! Need ${cost}`)
       return
     }
-    gold.value -= costs.repairHaul
+    gold.value -= cost
+    playerUpgrades.value.repairCount++
     const maxHp = 100 + playerUpgrades.value.maxHpBonus * 10
     hp.value = Math.min(maxHp, hp.value + 10)
-    showShopMessage('✅ Repaired! +10 HP for 100 gold')
+    showShopMessage(`✅ Repaired! +10 HP for ${cost}g`)
     return
   }
   
@@ -3460,7 +3462,7 @@ function startGame() {
   shopOpen.value = false
   
   // Reset upgrades
-  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, maxHpBonus: 0 }
+  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, maxHpBonus: 0, repairCount: 0 }
   
   // Reset memory sweep timer
   memorySweepTimer = 0
