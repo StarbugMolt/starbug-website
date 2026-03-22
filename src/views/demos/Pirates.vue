@@ -218,6 +218,8 @@ const MAX_ROCKS = 30   // Max rocks to keep loaded
 const MAX_DISPOSE_PER_FRAME = 3 // Spread disposal across frames to avoid lag spikes
 let disposeQueue = [] // Pending { mesh, type } for gradual disposal
 let lastChunkCount = 0
+let lastSpawnCheck = { x: 0, z: 0 } // Throttle procedural spawns
+let lastCleanupTime = 0
 
 // Computed for HUD
 const aliveEnemies = computed(() => enemyShips.value.filter(e => e.hp > 0).length)
@@ -280,8 +282,7 @@ let rocks = []
 let spawnedChunks = new Set() // Track spawned areas "x,z"
 let worldObjects = { islands: [], rocks: [], ships: [] }
 
-// Ocean
-let ocean
+// Ocean (waves removed - was too heavy)
 
 const showMessage = (msg, duration = 3000) => {
   message.value = msg
@@ -359,14 +360,8 @@ function init() {
   sunLight.position.set(50, 100, 50)
   scene.add(sunLight)
 
-  // Ocean
-  createOcean()
-
   // Sky
   createSky()
-
-  // Wind particles
-  createWindParticles()
 
   // Player ship
   createPlayerShip()
@@ -387,98 +382,9 @@ function init() {
   window.addEventListener('keydown', onKeyDown)
 }
 
-function createOcean() {
-  // === OCEAN WITH OPTIMIZED WAVES ===
 
-  // Deep ocean layer - reduced segments for performance
-  const oceanGeometry = new THREE.PlaneGeometry(1500, 1500, 60, 60)
-  const oceanMaterial = new THREE.MeshPhongMaterial({
-    color: 0x005577, // Deep blue
-    shininess: 200,
-    specular: 0x111111,
-    transparent: true,
-    opacity: 0.95
-  })
-  ocean = new THREE.Mesh(oceanGeometry, oceanMaterial)
-  ocean.rotation.x = -Math.PI / 2
-  ocean.position.y = -0.3
-  ocean.userData.originalPositions = oceanGeometry.attributes.position.array.slice()
-  scene.add(ocean)
 
-  // Wave surface layer - reduced segments
-  const waveGeometry = new THREE.PlaneGeometry(1500, 1500, 80, 80)
-  const waveMaterial = new THREE.MeshPhongMaterial({
-    color: 0x0088aa, // Lighter blue
-    shininess: 250,
-    specular: 0x444444,
-    transparent: true,
-    opacity: 0.7,
-    side: THREE.DoubleSide
-  })
-  const waves = new THREE.Mesh(waveGeometry, waveMaterial)
-  waves.rotation.x = -Math.PI / 2
-  waves.position.y = 0
-  waves.userData.originalPositions = waveGeometry.attributes.position.array.slice()
-  waves.userData.isWaveLayer = true
-  scene.add(waves)
 
-  // Store reference
-  ocean = waves
-
-  // Foam/whitecap layer - reduced segments
-  const foamGeometry = new THREE.PlaneGeometry(1500, 1500, 40, 40)
-  const foamMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    transparent: true,
-    opacity: 0.15,
-    side: THREE.DoubleSide
-  })
-  const foam = new THREE.Mesh(foamGeometry, foamMaterial)
-  foam.rotation.x = -Math.PI / 2
-  foam.position.y = 0.1
-  foam.userData.originalPositions = foamGeometry.attributes.position.array.slice()
-  foam.userData.isFoamLayer = true
-  scene.add(foam)
-  ocean.userData.foam = foam
-}
-
-// Animate ocean waves - beautiful realistic movement
-function animateOceanWaves(time) {
-  if (!ocean || !ocean.userData.originalPositions) return
-
-  // Animate main wave layer - simplified calculation
-  const positions = ocean.geometry.attributes.position
-  const original = ocean.userData.originalPositions
-
-  for (let i = 0; i < positions.count; i++) {
-    const x = original[i * 3]
-    const z = original[i * 3 + 2]
-
-    // Simplified wave calculation
-    const swell = Math.sin(x * 0.01 + time * 0.4) * Math.cos(z * 0.008 + time * 0.3) * 1.2
-    const wave = Math.sin(x * 0.03 + time * 0.6) * Math.cos(z * 0.025 + time * 0.5) * 0.6
-
-    positions.array[i * 3 + 1] = swell + wave
-  }
-  positions.needsUpdate = true
-
-  // Animate foam layer - simplified
-  if (ocean.userData.foam) {
-    const foamPositions = ocean.userData.foam.geometry.attributes.position
-    const foamOriginal = ocean.userData.foam.userData.originalPositions
-
-    for (let i = 0; i < foamPositions.count; i++) {
-      const x = foamOriginal[i * 3]
-      const z = foamOriginal[i * 3 + 2]
-
-      const waveHeight = Math.sin(x * 0.01 + time * 0.4) * Math.cos(z * 0.008 + time * 0.3) * 1.2
-      const foam = waveHeight > 0.8 ? (waveHeight - 0.8) * 0.2 : 0
-
-      foamPositions.array[i * 3 + 1] = waveHeight * 0.2 + foam
-    }
-    foamPositions.needsUpdate = true
-  }
-}
 
 function createSky() {
   // Sun
@@ -2231,18 +2137,13 @@ function animateSails(dt) {
     positions.needsUpdate = true
   })
 
-  // Update wind particles
-  updateWindParticles(dt)
-
   // Update treasure
   if (gameState.value === 'playing') {
     updateTreasure(dt)
   }
 }
 
-// Wind particles system
-let windParticles = []
-const maxWindParticles = 50
+
 
 // Chunk size
 const CHUNK_SIZE = 200 // Each chunk is 200x200 units
@@ -2259,106 +2160,6 @@ const CANNONBALL_CULL_DIST = 300
 const ENEMY_IDLE_DIST = 200 // Beyond this = idle (don't chase)
 const ENEMY_ALERT_DIST = 120 // Beyond this = alert (start approaching)
 const ENEMY_ATTACK_DIST = 100 // Within this = attacking (full chase)
-
-function createWindParticles() {
-  for (let i = 0; i < maxWindParticles; i++) {
-    // Each wind particle is a line (trail)
-    const geometry = new THREE.BufferGeometry()
-    const positions = new Float32Array(6) // 2 points per line
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-
-    const material = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.25,
-      blending: THREE.AdditiveBlending,
-      depthTest: false, // Always render
-      depthWrite: false,
-      renderOrder: 999 // Render on top
-    })
-
-    const particle = new THREE.Line(geometry, material)
-    particle.frustumCulled = false // Never cull
-    initWindParticle(particle)
-    scene.add(particle)
-    windParticles.push(particle)
-  }
-}
-
-function initWindParticle(particle) {
-  // Spawn around player - full circle
-  const angle = Math.random() * Math.PI * 2
-  const radius = 10 + Math.random() * 40
-  particle.userData = {
-    x: playerPos.value.x + Math.cos(angle) * radius,
-    y: 2 + Math.random() * 10,
-    z: playerPos.value.z + Math.sin(angle) * radius,
-    life: 0,
-    maxLife: 2 + Math.random() * 2,
-    swirlPhase: Math.random() * Math.PI * 2,
-    swirlSpeed: 1 + Math.random() * 1.5
-  }
-
-  const pos = particle.geometry.attributes.position.array
-  pos[0] = particle.userData.x
-  pos[1] = particle.userData.y
-  pos[2] = particle.userData.z
-  pos[3] = particle.userData.x
-  pos[4] = particle.userData.y
-  pos[5] = particle.userData.z
-}
-
-function updateWindParticles(dt) {
-  const time = Date.now() * 0.001
-
-  // Key fix: particles ALWAYS faster than player ship
-  const minSpeed = playerSpeed.value * 1.3 + 3  // Always faster than ship + base
-  const windComp = windSpeed.value * 2
-  const particleSpeed = Math.max(minSpeed, windComp + 4)
-
-  windParticles.forEach(particle => {
-    particle.userData.life += dt
-
-    // Move in wind direction
-    const vx = Math.sin(windAngle) * particleSpeed
-    const vz = Math.cos(windAngle) * particleSpeed
-
-    // Gentle swirl (leaf-like)
-    const swirl = Math.sin(time * particle.userData.swirlSpeed + particle.userData.swirlPhase)
-    const swirlX = Math.cos(windAngle + Math.PI/2) * swirl * 0.4
-    const swirlZ = Math.sin(windAngle + Math.PI/2) * swirl * 0.4
-
-    particle.userData.x += (vx + swirlX) * dt
-    particle.userData.z += (vz + swirlZ) * dt
-
-    // Bob up/down
-    particle.userData.y += Math.sin(time * 2 + particle.userData.swirlPhase) * 0.4 * dt
-    particle.userData.y = Math.max(1, Math.min(12, particle.userData.y))
-
-    // Trail
-    const pos = particle.geometry.attributes.position.array
-    pos[0] = particle.userData.x
-    pos[1] = particle.userData.y
-    pos[2] = particle.userData.z
-    pos[3] = particle.userData.x - vx * 0.08
-    pos[4] = particle.userData.y
-    pos[5] = particle.userData.z - vz * 0.08
-    particle.geometry.attributes.position.needsUpdate = true
-
-    // Fade
-    const life = particle.userData.life / particle.userData.maxLife
-    particle.material.opacity = 0.2 * (1 - life)
-
-    // Respawn if too old or too far
-    const dx = particle.userData.x - playerPos.value.x
-    const dz = particle.userData.z - playerPos.value.z
-    const dist = Math.sqrt(dx*dx + dz*dz)
-
-    if (particle.userData.life > particle.userData.maxLife || dist > 60) {
-      initWindParticle(particle)
-    }
-  })
-}
 
 // Check if a position would collide with obstacles
 function checkIslandCollision(x, z, radius) {
@@ -2672,8 +2473,19 @@ function update(dt) {
   playerPos.value.x += Math.sin(playerAngle) * playerSpeed.value * dt
   playerPos.value.z += Math.cos(playerAngle) * playerSpeed.value * dt
 
-  // Infinite world - no boundaries, but check for procedural spawns
-  checkProceduralSpawns()
+  // Infinite world - check procedural spawns only when player moved ~50+ units
+  const dx = playerPos.value.x - lastSpawnCheck.x
+  const dz = playerPos.value.z - lastSpawnCheck.z
+  if (dx * dx + dz * dz > 2500) {
+    checkProceduralSpawns()
+    lastSpawnCheck = { x: playerPos.value.x, z: playerPos.value.z }
+  }
+
+  // Cleanup distant objects every 2 seconds
+  if (Date.now() - lastCleanupTime > 2000) {
+    cleanupDistantChunks()
+    lastCleanupTime = Date.now()
+  }
 
   // Update ship mesh
   playerShip.position.x = playerPos.value.x
@@ -3277,11 +3089,6 @@ function update(dt) {
   if (portCooldown.value > 0) portCooldown.value -= dt
   if (starboardCooldown.value > 0) starboardCooldown.value -= dt
 
-  // Animate ocean waves
-  if (ocean) {
-    animateOceanWaves(Date.now() * 0.001)
-  }
-
   // === SHIP WAKE TRAIL ===
   // Spawn wake particles based on speed
   if (playerSpeed.value > 1) {
@@ -3293,11 +3100,17 @@ function update(dt) {
   }
   updateWakeParticles(dt)
 
-  // Update fire effects on damaged ships
-  updateFireEffects(dt)
-
-  // === UPDATE ENEMY INDICATORS ===
-  updateEnemyIndicators()
+  // Update fire effects on damaged ships (throttled to every 0.5s)
+  if (!updateFireEffects._last || Date.now() - updateFireEffects._last > 500) {
+    updateFireEffects(dt)
+    updateFireEffects._last = Date.now()
+  }
+  
+  // === UPDATE ENEMY INDICATORS === (throttled to every 0.5s)
+  if (!updateEnemyIndicators._last || Date.now() - updateEnemyIndicators._last > 500) {
+    updateEnemyIndicators()
+    updateEnemyIndicators._last = Date.now()
+  }
 }
 
 function updateEnemyIndicators() {
