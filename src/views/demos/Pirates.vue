@@ -2,7 +2,7 @@
   <div class="game-container" ref="container">
     <div class="hud">
       <div class="hud-left">
-        <div class="stat">🏴‍☠️ HP: {{ hp }}/100</div>
+        <div class="stat">🏴‍☠️ HP: {{ hp }}/{{ 100 + playerUpgrades.maxHpBonus * 10 }}</div>
         <div class="stat">💰 Gold: {{ gold }}</div>
         <div class="stat">💨 Wind: {{ windDirection }} {{ windSpeed.toFixed(1) }} kn</div>
         <div class="stat">⚓ Speed: {{ playerSpeed?.toFixed(1) || '0' }} kn</div>
@@ -73,7 +73,7 @@
     <div class="overlay harbour-overlay" v-if="shopOpen">
       <div class="harbour-title">⚓ PORT SHOP ⚓</div>
       <div class="harbour-gold">💰 {{ gold }} Gold</div>
-      <div class="harbour-hp">❤️ HP: {{ hp }}/100</div>
+      <div class="harbour-hp">❤️ HP: {{ hp }}/{{ 100 + playerUpgrades.maxHpBonus * 10 }}</div>
       <div class="shop-upgrades">
         <!-- Faster Sails -->
         <div class="upgrade-card">
@@ -142,6 +142,22 @@
             BUY 100g
           </button>
         </div>
+
+        <!-- Max HP -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">❤️</div>
+          <div class="upgrade-name">Max HP</div>
+          <div class="upgrade-level">+{{ playerUpgrades.maxHpBonus * 10 }} / +10 per level</div>
+          <div class="upgrade-bonus">Current max: {{ 100 + playerUpgrades.maxHpBonus * 10 }} HP</div>
+          <button 
+            v-if="playerUpgrades.maxHpBonus < 5" 
+            class="upgrade-btn"
+            @click="buyUpgrade('maxHpBonus')"
+          >
+            BUY {{ [150, 300, 500, 750, 1000][playerUpgrades.maxHpBonus] }}g
+          </button>
+          <div v-else class="upgrade-max">MAXED (150 HP)</div>
+        </div>
       </div>
       
       <div class="shop-message" v-if="shopMessage">{{ shopMessage }}</div>
@@ -183,7 +199,8 @@ const shopOpen = ref(false)
 const playerUpgrades = ref({
   sailSpeed: 0,   // +1-3 = faster sails (extra speed bonus)
   cannonCount: 0, // +1-3 = more cannons per broadside
-  cannonSpeed: 0  // +1-3 = faster reload
+  cannonSpeed: 0, // +1-3 = faster reload
+  maxHpBonus: 0  // +10 max HP per level
 })
 const shopMessage = ref('')
 const showShopMessage = (msg) => {
@@ -2100,7 +2117,8 @@ function buyUpgrade(type) {
     sailSpeed: { 1: 150, 2: 350, 3: 600 },
     cannonCount: { 1: 200, 2: 450, 3: 750 },
     cannonSpeed: { 1: 175, 2: 400, 3: 700 },
-    repairHaul: 100
+    repairHaul: 100,
+    maxHpBonus: { 1: 150, 2: 300, 3: 500, 4: 750, 5: 1000 }
   }
   
   if (type === 'repairHaul') {
@@ -2109,8 +2127,29 @@ function buyUpgrade(type) {
       return
     }
     gold.value -= costs.repairHaul
+    const maxHp = 100 + playerUpgrades.value.maxHpBonus * 10
+    hp.value = Math.min(maxHp, hp.value + 10)
     showShopMessage('✅ Repaired! +10 HP for 100 gold')
-    hp.value = Math.min(100, hp.value + 10)
+    return
+  }
+  
+  if (type === 'maxHpBonus') {
+    const current = playerUpgrades.value.maxHpBonus
+    if (current >= 5) {
+      showShopMessage('⚓ Max level reached!')
+      return
+    }
+    const nextLevel = current + 1
+    const cost = costs.maxHpBonus[nextLevel]
+    if (gold.value < cost) {
+      showShopMessage(`💰 Not enough gold! Need ${cost}`)
+      return
+    }
+    gold.value -= cost
+    playerUpgrades.value.maxHpBonus = nextLevel
+    const newMaxHp = 100 + nextLevel * 10
+    hp.value = newMaxHp // Full heal on upgrade
+    showShopMessage(`✅ Max HP +10! Now ${newMaxHp} HP`)
     return
   }
   
@@ -3421,7 +3460,7 @@ function startGame() {
   shopOpen.value = false
   
   // Reset upgrades
-  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0 }
+  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, maxHpBonus: 0 }
   
   // Reset memory sweep timer
   memorySweepTimer = 0
