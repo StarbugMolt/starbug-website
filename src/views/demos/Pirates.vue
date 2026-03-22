@@ -1,3 +1,43 @@
+<!--
+  PIRATES OF THE BURNING SEA — ARCHIVE OF CUT FEATURES
+  
+  These were implemented but removed due to performance issues on mid-range hardware.
+  Kept here as a reference for if/when the game is optimised for higher-end targets.
+  
+  REMOVED FEATURES:
+  
+  1. OCEAN WAVE SYSTEM
+     - Was: 3 layered ocean meshes (deep ocean 60x60, wave surface 80x80, foam 40x40)
+     - animateOceanWaves() recalculated ~6,400+ vertices per frame using sine/cos math
+     - Each vertex: 4 trig operations × 6,400 = ~25,600 trig calls/frame
+     - Removed: createOcean(), animateOceanWaves(), all ocean geometry + materials
+     - Symptom: major FPS drop after ~30s, caused sync main-thread blocking
+     
+  2. WIND PARTICLE SYSTEM
+     - Was: 50 THREE.Line GPU objects (white streak trails) updated every frame
+     - Each particle: full trig math for position, swirl, trail, respawn logic
+     - Removed: createWindParticles(), initWindParticle(), updateWindParticles()
+     - These were purely cosmetic (visual wind effect)
+     
+  3. PERIODIC MEMORY SWEEP (original version)
+     - Was: forceMemorySweep() called every 30 seconds via a timer
+     - Bulk-disposed all island groups (full group trees) synchronously in one frame
+     - Caused multi-second freeze every 30s — completely blocking the main thread
+     - Replaced with: gradual per-frame disposal queue (MAX_DISPOSE_PER_FRAME = 3)
+     - Symptom: massive lag spike exactly every 30 seconds
+     
+  4. PER-FRAME THROTTLING (all removed/changed)
+     - checkProceduralSpawns() — was every frame, now every ~50 units of movement
+     - cleanupDistantChunks() — was every frame, now every 2 seconds
+     - updateEnemyIndicators() — was every frame, now every 500ms
+     - updateFireEffects() — was every frame, now every 500ms
+     
+  If reviving any of these:
+  - Ocean: use a single PlaneGeometry 20x20 with a simple scrolling normal map + ShaderMaterial
+         (GPU-side animation, no CPU trig per vertex)
+  - Wind particles: use a Points geometry with a custom shader, no per-particle JS math
+  - Memory sweep: NEVER dispose heavy objects synchronously — always queue and spread across frames
+-->
 <template>
   <div class="game-container" ref="container">
     <div class="hud">
