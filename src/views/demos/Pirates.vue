@@ -133,16 +133,14 @@
         <div class="upgrade-card repair-card">
           <div class="upgrade-icon">🔧</div>
           <div class="upgrade-name">Repair Haul</div>
-          <div class="upgrade-level">{{ playerUpgrades.repairHaul > 0 ? 'OWNED' : 'One-time purchase' }}</div>
+          <div class="upgrade-level">∞ Infinite</div>
           <div class="upgrade-bonus">Restore 10 HP for 100g</div>
           <button 
-            v-if="playerUpgrades.repairHaul === 0" 
             class="upgrade-btn repair-btn"
             @click="buyUpgrade('repairHaul')"
           >
             BUY 100g
           </button>
-          <div v-else class="upgrade-owned">✅ READY</div>
         </div>
       </div>
       
@@ -185,8 +183,7 @@ const shopOpen = ref(false)
 const playerUpgrades = ref({
   sailSpeed: 0,   // +1-3 = faster sails (extra speed bonus)
   cannonCount: 0, // +1-3 = more cannons per broadside
-  cannonSpeed: 0, // +1-3 = faster reload
-  repairHaul: 0   // +1 = one-time use repair 10 HP for 100 gold
+  cannonSpeed: 0  // +1-3 = faster reload
 })
 const shopMessage = ref('')
 const showShopMessage = (msg) => {
@@ -2107,17 +2104,12 @@ function buyUpgrade(type) {
   }
   
   if (type === 'repairHaul') {
-    if (playerUpgrades.value.repairHaul > 0) {
-      showShopMessage('⚓ Repair haul already purchased!')
-      return
-    }
     if (gold.value < costs.repairHaul) {
       showShopMessage('💰 Not enough gold! Need 100')
       return
     }
     gold.value -= costs.repairHaul
-    playerUpgrades.value.repairHaul++
-    showShopMessage('✅ Repair haul purchased! +10 HP for 100 gold')
+    showShopMessage('✅ Repaired! +10 HP for 100 gold')
     hp.value = Math.min(100, hp.value + 10)
     return
   }
@@ -3429,7 +3421,7 @@ function startGame() {
   shopOpen.value = false
   
   // Reset upgrades
-  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, repairHaul: 0 }
+  playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0 }
   
   // Reset memory sweep timer
   memorySweepTimer = 0
