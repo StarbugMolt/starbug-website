@@ -1074,7 +1074,7 @@ function createEnemyShipMesh(shipType) {
   if (shipType === SHIP_TYPES.RAMMER) {
     const spike = new THREE.Mesh(
       new THREE.ConeGeometry(0.35 * size, 4 * size, 6),
-      new THREE.MeshPhongMaterial({ color: 0x888888, metalness: 0.9 })
+      new THREE.MeshPhongMaterial({ color: 0x888888, shininess: 80 })
     )
     spike.rotation.x = -Math.PI / 2
     spike.position.set(0, 1 * size, 5 * size)
@@ -1352,11 +1352,12 @@ function spawnChunk(cx, cz) {
     spawnRock(rx, rz)
   }
 
-  // Spawn random ships (0-3 ships per chunk) - skip starting chunk
+  // Ship tracking for this chunk (used by both live ships and sunken ships)
+  const chunkShips = []
+
   // Spawn random ships (0-3 ships per chunk) - skip starting chunk
   if (!isStartingChunk) {
     const numShips = Math.random() < 0.3 ? 1 : 0 // 30% chance of 1 ship per chunk
-    const chunkShips = []
 
     for (let s = 0; s < numShips; s++) {
       // Try to find a valid position (away from borders and other ships)
