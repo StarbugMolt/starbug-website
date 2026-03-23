@@ -442,15 +442,7 @@ function createOcean() {
   debugWindArrow = windArrow
   console.log('[createOcean] wind arrow added')
   
-  // Debug: horizontal ring around ship to show wind direction at ship level
-  const windRingGeom = new THREE.TorusGeometry(8, 0.3, 8, 32)
-  const windRingMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 })
-  const windRing = new THREE.Mesh(windRingGeom, windRingMat)
-  windRing.rotation.x = -Math.PI / 2
-  windRing.position.y = 1
-  windRing.userData.isWindRing = true
-  console.log('[createOcean] ring ok, playerShip=', !!playerShip)
-  playerShip.add(windRing)
+  console.log('[createOcean] ring skipped (playerShip not ready)')
   console.log('[createOcean] all done')
 }
 
@@ -624,6 +616,14 @@ function createSky() {
 
 function createPlayerShip() {
   playerShip = new THREE.Group()
+  
+  // Wind direction ring — always visible around ship
+  const windRingGeom = new THREE.TorusGeometry(8, 0.3, 8, 32)
+  const windRingMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 })
+  const windRing = new THREE.Mesh(windRingGeom, windRingMat)
+  windRing.rotation.x = -Math.PI / 2
+  windRing.position.y = 1
+  playerShip.add(windRing)
 
   // === IMPROVED HULL - Tapered shape ===
   // Main hull body (tapered)
