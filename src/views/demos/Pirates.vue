@@ -407,21 +407,18 @@ const oceanFragmentShader = `
 `
 
 function createOcean() {
-  console.log('[createOcean] scene=', !!scene, 'oceanVertexShader=', !!oceanVertexShader)
+  console.log('[createOcean] scene=', !!scene, 'oceanMesh before=', !!oceanMesh)
   const geometry = new THREE.PlaneGeometry(1500, 1500, OCEAN_SEGMENTS, OCEAN_SEGMENTS)
-  const material = new THREE.ShaderMaterial({
-    vertexShader: oceanVertexShader,
-    fragmentShader: oceanFragmentShader,
-    uniforms: { uTime: { value: 0 } },
-    transparent: true,
-    side: THREE.DoubleSide,
-    fog: false
-  })
+  // TEST: use basic material first to verify scene.add works
+  const material = new THREE.MeshBasicMaterial({ color: 0x0055aa, side: THREE.DoubleSide })
   oceanMesh = new THREE.Mesh(geometry, material)
+  console.log('[createOcean] oceanMesh created=', !!oceanMesh)
   oceanMesh.rotation.x = -Math.PI / 2
   oceanMesh.position.y = -0.5
   oceanMesh.renderOrder = 0
+  console.log('[createOcean] about to scene.add, scene=', typeof scene)
   scene.add(oceanMesh)
+  console.log('[createOcean] ocean added!')
   
   // Debug: add a solid cyan plane at y=0 (above ocean at y=-0.5) to verify depth ordering
   const debugGeom = new THREE.PlaneGeometry(500, 500)
@@ -3331,8 +3328,8 @@ function update(dt) {
     updateWindParticles(dt)
   }
   
-  // Update GPU ocean shader time uniform
-  if (oceanMesh) {
+  // Update GPU ocean shader time uniform (only if ShaderMaterial, not BasicMaterial)
+  if (oceanMesh && oceanMesh.material.uniforms && oceanMesh.material.uniforms.uTime) {
     oceanMesh.material.uniforms.uTime.value = Date.now() * 0.001
   }
   
