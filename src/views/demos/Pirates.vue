@@ -377,8 +377,8 @@ const oceanVertexShader = `
   void main() {
     vUv = uv;
     vec3 pos = position;
-    float wave1 = sin(pos.x * 0.02 + uTime * 0.5) * cos(pos.y * 0.015 + uTime * 0.4) * 1.5;
-    float wave2 = sin(pos.x * 0.04 + uTime * 0.8) * cos(pos.y * 0.03 + uTime * 0.6) * 0.7;
+    float wave1 = sin(pos.x * 0.015 + uTime * 0.4) * cos(pos.y * 0.01 + uTime * 0.3) * 3.0;
+    float wave2 = sin(pos.x * 0.03 + uTime * 0.7) * cos(pos.y * 0.02 + uTime * 0.5) * 1.5;
     pos.z = wave1 + wave2;
     vElevation = pos.z;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
@@ -389,13 +389,15 @@ const oceanFragmentShader = `
   varying vec2 vUv;
   varying float vElevation;
   void main() {
-    float depth = 0.5 + (vElevation + 2.0) * 0.15;
-    vec3 deep = vec3(0.0, 0.25, 0.45);
-    vec3 shallow = vec3(0.0, 0.45, 0.6);
-    vec3 color = mix(deep, shallow, clamp(depth, 0.0, 1.0));
-    float shimmer = max(0.0, vElevation) * 0.1;
-    color += shimmer * vec3(0.5, 0.7, 0.8);
-    gl_FragColor = vec4(color, 0.92);
+    float t = 0.5 + (vElevation + 4.0) * 0.1;
+    vec3 deep = vec3(0.0, 0.18, 0.38);
+    vec3 mid = vec3(0.05, 0.35, 0.55);
+    vec3 shallow = vec3(0.1, 0.55, 0.65);
+    vec3 color = mix(deep, mid, clamp(t * 0.5, 0.0, 0.5));
+    color = mix(color, shallow, clamp((t - 0.5) * 2.0, 0.0, 1.0));
+    float shimmer = abs(sin(vElevation * 2.0 + uTime * 3.0)) * 0.12;
+    color += shimmer * vec3(0.6, 0.8, 0.9);
+    gl_FragColor = vec4(color, 0.95);
   }
 `
 
@@ -436,16 +438,17 @@ function createWindParticles() {
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(windParticlePositions, 3))
   const material = new THREE.PointsMaterial({
-    color: 0xaaddff,
-    size: 0.35,
+    color: 0xffffff,
+    size: 1.2,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.7,
     sizeAttenuation: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false
   })
   windParticles = new THREE.Points(geometry, material)
   windParticles.frustumCulled = false
+  windParticles.material.fog = false // Wind particles ignore scene fog - always visible
   scene.add(windParticles)
 }
 
@@ -460,9 +463,9 @@ function updateWindParticles(dt) {
     if (windParticleLifetimes[i] <= 0) {
       const spread = Math.random() * Math.PI * 2
       const radius = 5 + Math.random() * 30
-      windParticlePositions[i * 3] = Math.cos(spread) * radius
+      windParticlePositions[i * 3] = Math.cos(spread) * radius + playerPos.value.x
       windParticlePositions[i * 3 + 1] = 2 + Math.random() * 8
-      windParticlePositions[i * 3 + 2] = Math.sin(spread) * radius
+      windParticlePositions[i * 3 + 2] = Math.sin(spread) * radius + playerPos.value.z
       windParticleLifetimes[i] = 1.5 + Math.random() * 1.5
       windParticleVels[i] = 0.5 + Math.random() * 0.8
     } else {
@@ -470,10 +473,10 @@ function updateWindParticles(dt) {
       windParticlePositions[i * 3 + 2] += Math.cos(windAngle) * speed * windParticleVels[i] * dt
     }
     
-    // Keep near player
-    const px = windParticlePositions[i * 3] - playerPos.value.x
-    const pz = windParticlePositions[i * 3 + 2] - playerPos.value.z
-    if (px * px + pz * pz > 50 * 50) windParticleLifetimes[i] = 0
+    // Keep near player (use player-relative positions so they stay close)
+    const relX = windParticlePositions[i * 3] - playerPos.value.x
+    const relZ = windParticlePositions[i * 3 + 2] - playerPos.value.z
+    if (relX * relX + relZ * relZ > 60 * 60) windParticleLifetimes[i] = 0
   }
   
   windParticles.geometry.attributes.position.needsUpdate = true
@@ -503,7 +506,8 @@ function init() {
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
-  scene.fog = new THREE.Fog(0x87CEEB, 50, 300)
+  // Darker fog so ocean contrasts with sky at distance
+  scene.fog = new THREE.Fog(0x5599bb, 80, 350)
 
   // Camera
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
