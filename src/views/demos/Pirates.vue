@@ -3,43 +3,43 @@
   See RULES.md for performance guidelines. -->
 
 
-  
+
   These were implemented but removed due to performance issues on mid-range hardware.
   Kept here as a reference for if/when the game is optimised for higher-end targets.
-  
+
   REMOVED FEATURES:
-  
+
   1. OCEAN WAVE SYSTEM
      - Was: 3 layered ocean meshes (deep ocean 60x60, wave surface 80x80, foam 40x40)
      - animateOceanWaves() recalculated ~6,400+ vertices per frame using sine/cos math
      - Each vertex: 4 trig operations × 6,400 = ~25,600 trig calls/frame
      - Removed: createOcean(), animateOceanWaves(), all ocean geometry + materials
      - Symptom: major FPS drop after ~30s, caused sync main-thread blocking
-     
+
   2. WIND PARTICLE SYSTEM
      - Was: 50 THREE.Line GPU objects (white streak trails) updated every frame
      - Each particle: full trig math for position, swirl, trail, respawn logic
      - Removed: createWindParticles(), initWindParticle(), updateWindParticles()
      - These were purely cosmetic (visual wind effect)
-     
+
   3. PERIODIC MEMORY SWEEP (original version)
      - Was: forceMemorySweep() called every 30 seconds via a timer
      - Bulk-disposed all island groups (full group trees) synchronously in one frame
-     - Caused multi-second freeze every 30s — completely blocking the main thread
+     - Caused multi-second freeze every 30s - completely blocking the main thread
      - Replaced with: gradual per-frame disposal queue (MAX_DISPOSE_PER_FRAME = 3)
      - Symptom: massive lag spike exactly every 30 seconds
-     
+
   4. PER-FRAME THROTTLING (all removed/changed)
-     - checkProceduralSpawns() — was every frame, now every ~50 units of movement
-     - cleanupDistantChunks() — was every frame, now every 2 seconds
-     - updateEnemyIndicators() — was every frame, now every 500ms
-     - updateFireEffects() — was every frame, now every 500ms
-     
+     - checkProceduralSpawns() - was every frame, now every ~50 units of movement
+     - cleanupDistantChunks() - was every frame, now every 2 seconds
+     - updateEnemyIndicators() - was every frame, now every 500ms
+     - updateFireEffects() - was every frame, now every 500ms
+
   If reviving any of these:
   - Ocean: use a single PlaneGeometry 20x20 with a simple scrolling normal map + ShaderMaterial
          (GPU-side animation, no CPU trig per vertex)
   - Wind particles: use a Points geometry with a custom shader, no per-particle JS math
-  - Memory sweep: NEVER dispose heavy objects synchronously — always queue and spread across frames
+  - Memory sweep: NEVER dispose heavy objects synchronously - always queue and spread across frames
 -->
 <template>
   <div class="game-container" ref="container">
@@ -178,12 +178,28 @@
           <div class="upgrade-name">Repair Haul</div>
           <div class="upgrade-level">∞ Infinite</div>
           <div class="upgrade-bonus">Restore 10 HP for {{ 100 + playerUpgrades.repairCount * 10 }}g</div>
-          <button
+          <button 
             class="upgrade-btn repair-btn"
             @click="buyUpgrade('repairHaul')"
           >
             BUY {{ 100 + playerUpgrades.repairCount * 10 }}g
           </button>
+        </div>
+
+        <!-- Parrot -->
+        <div class="upgrade-card parrot-card">
+          <div class="upgrade-icon">🦜</div>
+          <div class="upgrade-name">Ship's Parrot</div>
+          <div class="upgrade-level">{{ playerUpgrades.parrot ? 'ON YOUR MAST!' : 'One-time purchase' }}</div>
+          <div class="upgrade-bonus">250 gold — a loyal companion!</div>
+          <button 
+            v-if="!playerUpgrades.parrot" 
+            class="upgrade-btn parrot-btn"
+            @click="buyUpgrade('parrot')"
+          >
+            BUY 250g
+          </button>
+          <div v-else class="upgrade-owned">✅ ABOARD</div>
         </div>
 
         <!-- Max HP -->
@@ -244,7 +260,8 @@ const playerUpgrades = ref({
   cannonCount: 0, // +1-3 = more cannons per broadside
   cannonSpeed: 0, // +1-3 = faster reload
   maxHpBonus: 0,  // +10 max HP per level
-  repairCount: 0  // times repair used (increases cost by 10 each time)
+  repairCount: 0, // times repair used (increases cost by 10 each time)
+  parrot: false    // visual parrot on ship mast when purchased
 })
 const shopMessage = ref('')
 const showShopMessage = (msg) => {
@@ -252,7 +269,7 @@ const showShopMessage = (msg) => {
   setTimeout(() => { if (shopMessage.value === msg) shopMessage.value = '' }, 2500)
 }
 
-// Wind particles (GPU Points — single draw call, no per-particle JS objects)
+// Wind particles (GPU Points - single draw call, no per-particle JS objects)
 const MAX_WIND_PARTICLES = 35
 let windParticles
 let windParticlePositions
@@ -335,7 +352,7 @@ let worldObjects = { islands: [], rocks: [], ships: [] }
 
 // Ocean (GPU shader - no CPU trig)
 let oceanMesh
-const OCEAN_SEGMENTS = 25 // 25x25 = 625 vertices — GPU handles all animation
+const OCEAN_SEGMENTS = 25 // 25x25 = 625 vertices - GPU handles all animation
 
 const showMessage = (msg, duration = 3000) => {
   message.value = msg
@@ -370,9 +387,9 @@ function disposeGroup(group) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// GPU OCEAN — all animation on GPU, zero CPU trig
+// GPU OCEAN - all animation on GPU, zero CPU trig
 // ══════════════════════════════════════════════════════════════
-// Ocean — chunked tiles (Stone's approach: 9 tiles of 200x200, 15x15 segments each)
+// Ocean - chunked tiles (Stone's approach: 9 tiles of 200x200, 15x15 segments each)
 const OCEAN_PLANE_CHUNK_SIZE = 200
 const OCEAN_PLANE_SEGMENTS = 15
 const oceanChunks = []
@@ -413,7 +430,7 @@ function updateOceanChunks() {
   }
 }
 
-// Animate ocean vertices — CPU-side but limited to 9 chunks of 15x15 = 2025 vertices
+// Animate ocean vertices - CPU-side but limited to 9 chunks of 15x15 = 2025 vertices
 function animateWaves(time) {
   for (const chunk of oceanChunks) {
     const pos = chunk.geometry.attributes.position
@@ -430,7 +447,7 @@ function animateWaves(time) {
 }
 
 function createOcean() {
-  // GPU shader — waves animate entirely on GPU, zero CPU trig per frame
+  // GPU shader - waves animate entirely on GPU, zero CPU trig per frame
   const geometry = new THREE.PlaneGeometry(1500, 1500, OCEAN_SEGMENTS, OCEAN_SEGMENTS)
   const material = new THREE.ShaderMaterial({
     vertexShader: oceanVertexShader,
@@ -446,14 +463,14 @@ function createOcean() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// GPU WIND PARTICLES — Points geometry, single draw call
+// GPU WIND PARTICLES - Points geometry, single draw call
 // ══════════════════════════════════════════════════════════════
 function createWindParticles() {
   const count = MAX_WIND_PARTICLES
   windParticlePositions = new Float32Array(count * 3)
   windParticleLifetimes = new Float32Array(count)
   windParticleVels = new Float32Array(count)
-  
+
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2
     const radius = Math.random() * 35
@@ -463,7 +480,7 @@ function createWindParticles() {
     windParticleLifetimes[i] = Math.random()
     windParticleVels[i] = 0.5 + Math.random() * 0.8
   }
-  
+
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.BufferAttribute(windParticlePositions, 3))
   const material = new THREE.PointsMaterial({
@@ -486,10 +503,10 @@ function updateWindParticles(dt) {
   if (!windParticles) return
   const count = MAX_WIND_PARTICLES
   const speed = windSpeed.value * 3 + 4
-  
+
   for (let i = 0; i < count; i++) {
     windParticleLifetimes[i] -= dt * 0.4
-    
+
     if (windParticleLifetimes[i] <= 0) {
       const spread = Math.random() * Math.PI * 2
       const radius = 5 + Math.random() * 30
@@ -502,13 +519,13 @@ function updateWindParticles(dt) {
       windParticlePositions[i * 3] += Math.sin(windAngle) * speed * windParticleVels[i] * dt
       windParticlePositions[i * 3 + 2] += Math.cos(windAngle) * speed * windParticleVels[i] * dt
     }
-    
+
     // Keep near player (use player-relative positions so they stay close)
     const relX = windParticlePositions[i * 3] - playerPos.value.x
     const relZ = windParticlePositions[i * 3 + 2] - playerPos.value.z
     if (relX * relX + relZ * relZ > 60 * 60) windParticleLifetimes[i] = 0
   }
-  
+
   windParticles.geometry.attributes.position.needsUpdate = true
 }
 
@@ -536,7 +553,7 @@ function init() {
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
-  // Fog DISABLED — was density=0.004 which fogged everything invisible at 50 units
+  // Fog DISABLED - was density=0.004 which fogged everything invisible at 50 units
   // Ships at 50 units from camera were 82% fogged into sky color
   // Re-enable later with density=0.001 once scene renders correctly
   scene.fog = null
@@ -1260,7 +1277,7 @@ function checkProceduralSpawns() {
   const px = Math.floor(playerPos.value.x / CHUNK_SIZE)
   const pz = Math.floor(playerPos.value.z / CHUNK_SIZE)
 
-  // Expand chunks gradually — cap at 5x5 (radius 2) to avoid lag spikes
+  // Expand chunks gradually - cap at 5x5 (radius 2) to avoid lag spikes
   const chunkRadius = spawnedChunks.size < 10 ? 1 : 2
 
   // Check chunk grid around player
@@ -1454,7 +1471,7 @@ function spawnChunk(cx, cz) {
   }
 
   // Deterministic: ~5% of chunks get a sunken ship, based on chunk coords
-  // Same chunks always have sunken ships — no random spam
+  // Same chunks always have sunken ships - no random spam
   if (!isStartingChunk && (cx * 31 + cz * 17) % 100 < 5) {
     let sx, sz, validPos
     let attempts = 0
@@ -2224,7 +2241,8 @@ function buyUpgrade(type) {
     sailSpeed: { 1: 150, 2: 350, 3: 600 },
     cannonCount: { 1: 200, 2: 450, 3: 750 },
     cannonSpeed: { 1: 175, 2: 400, 3: 700 },
-    maxHpBonus: { 1: 150, 2: 300, 3: 500, 4: 750, 5: 1000 }
+    maxHpBonus: { 1: 150, 2: 300, 3: 500, 4: 750, 5: 1000 },
+    parrot: 250
   }
 
   if (type === 'repairHaul') {
@@ -2258,6 +2276,23 @@ function buyUpgrade(type) {
     const newMaxHp = 100 + nextLevel * 10
     hp.value = newMaxHp // Full heal on upgrade
     showShopMessage(`✅ Max HP +10! Now ${newMaxHp} HP`)
+    return
+  }
+
+  if (type === 'parrot') {
+    if (playerUpgrades.value.parrot) {
+      showShopMessage('🦜 You already have a parrot!')
+      return
+    }
+    const cost = costs.parrot
+    if (gold.value < cost) {
+      showShopMessage(`💰 Not enough gold! Need ${cost}`)
+      return
+    }
+    gold.value -= cost
+    playerUpgrades.value.parrot = true
+    addParrotToShip()
+    showShopMessage('🦜 Parrot acquired! It lives on your mast!')
     return
   }
 
@@ -3313,19 +3348,19 @@ function update(dt) {
   }
   updateWakeParticles(dt)
 
-  // Update wind particles (every 5 frames — cheap position math only)
+  // Update wind particles (every 5 frames - cheap position math only)
   windParticleFrameCounter++
   if (windParticleFrameCounter >= 5) {
     windParticleFrameCounter = 0
     updateWindParticles(dt)
   }
-  
+
   // Update GPU ocean shader time uniform (only if ShaderMaterial, not BasicMaterial)
   if (oceanMesh && oceanMesh.material.uniforms && oceanMesh.material.uniforms.uTime) {
     oceanMesh.material.uniforms.uTime.value = Date.now() * 0.001
   }
-  
-  // Debug wind indicators — update direction every frame
+
+  // Debug wind indicators - update direction every frame
   if (debugWindArrow) {
     debugWindArrow.rotation.y = windAngle
   }
@@ -3336,7 +3371,7 @@ function update(dt) {
     fireEffectsFrameCounter = 0
     updateFireEffects(dt)
   }
-  
+
   // === UPDATE ENEMY INDICATORS === (every 5 frames, smoothed)
   indicatorsFrameCounter++
   if (indicatorsFrameCounter >= 5) {
@@ -3560,7 +3595,7 @@ function startGame() {
 onMounted(() => {
   try {
     init()
-    createWindParticles() // Create ONCE — don't recreate on game restart
+    createWindParticles() // Create ONCE - don't recreate on game restart
     animate()
   } catch (e) {
     console.error('[Pirates] startup error:', e)
@@ -3868,6 +3903,20 @@ canvas {
   color: #00ff88;
   font-size: 0.9rem;
   font-weight: bold;
+}
+
+.parrot-card {
+  border-color: rgba(255,100,100,0.5);
+}
+.parrot-card:hover {
+  border-color: rgba(255,100,100,0.9);
+}
+.parrot-btn {
+  background: #8B3a00;
+  border-color: #ff6600;
+}
+.parrot-btn:hover {
+  background: #a04500;
 }
 
 .shop-message {
