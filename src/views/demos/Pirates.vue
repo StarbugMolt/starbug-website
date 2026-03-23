@@ -1,5 +1,8 @@
-<!--
-  PIRATES OF THE BURNING SEA — ARCHIVE OF CUT FEATURES
+<!-- ARCHIVE NOTE: Previously removed ocean waves (CPU trig), wind particles (CPU), periodic memory sweep.
+  All restored as GPU shader + Points geometry + per-frame disposal queue. Performance target: 30 FPS stable.
+  See RULES.md for performance guidelines. -->
+
+
   
   These were implemented but removed due to performance issues on mid-range hardware.
   Kept here as a reference for if/when the game is optimised for higher-end targets.
@@ -252,7 +255,6 @@ const showShopMessage = (msg) => {
 // Wind particles (GPU Points — single draw call, no per-particle JS objects)
 const MAX_WIND_PARTICLES = 35
 let windParticles
-let debugWindArrow
 let windParticlePositions
 let windParticleLifetimes
 let windParticleVels // { angle, speed } stored per particle
@@ -391,11 +393,15 @@ const oceanFragmentShader = `
   varying vec2 vUv;
   varying float vElevation;
   void main() {
-    // Test: pure red in corners, green in center to verify shader is running
-    float r = clamp(abs(vUv.x - 0.5) * 2.0, 0.0, 1.0);
-    float g = clamp((1.0 - abs(vUv.x - 0.5) * 2.0) * (1.0 - abs(vUv.y - 0.5) * 2.0), 0.0, 1.0);
-    float b = clamp(abs(vUv.y - 0.5) * 2.0, 0.0, 1.0);
-    gl_FragColor = vec4(r, g, b, 1.0);
+    vec3 deep = vec3(0.02, 0.12, 0.35);
+    vec3 mid = vec3(0.0, 0.35, 0.55);
+    vec3 crest = vec3(0.15, 0.65, 0.75);
+    float t = clamp((vElevation + 10.0) / 20.0, 0.0, 1.0);
+    vec3 color = mix(deep, mid, smoothstep(0.0, 0.5, t));
+    color = mix(color, crest, smoothstep(0.5, 1.0, t));
+    float shimmer = pow(max(0.0, vElevation / 10.0), 2.0) * 0.3;
+    color += shimmer * vec3(0.5, 0.8, 0.9);
+    gl_FragColor = vec4(color, 1.0);
   }
 `
 
@@ -576,13 +582,6 @@ function createSky() {
 
 function createPlayerShip() {
   playerShip = new THREE.Group()
-  
-  // Bright test cube above the ocean — if you see this, scene renders
-  const testBoxGeom = new THREE.BoxGeometry(3, 3, 3)
-  const testBoxMat = new THREE.MeshBasicMaterial({ color: 0xff00ff })
-  const testBox = new THREE.Mesh(testBoxGeom, testBoxMat)
-  testBox.position.set(0, 5, 20) // In front of camera
-  scene.add(testBox)
 
   // === IMPROVED HULL - Tapered shape ===
   // Main hull body (tapered)
