@@ -586,33 +586,6 @@ function init() {
   // Initial enemy
   spawnEnemyShip()
   console.log('[init] all done!')
-  renderer.setSize(window.innerWidth, window.innerHeight)
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-
-  // Lights
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
-  scene.add(ambientLight)
-
-  const sunLight = new THREE.DirectionalLight(0xffffcc, 1)
-  sunLight.position.set(50, 100, 50)
-  scene.add(sunLight)
-
-  // Sky
-  createSky()
-  
-  // GPU ocean (waves animated entirely on GPU)
-  createOcean()
-  
-  // GPU wind particles (Points geometry, single draw call)
-  createWindParticles()
-
-  // Player ship
-  createPlayerShip()
-
-  // Islands generated procedurally now
-
-  // Initial enemy
-  spawnEnemyShip()
 
   // Events
   window.addEventListener('resize', onResize)
@@ -624,11 +597,6 @@ function init() {
   window.addEventListener('wheel', onWheel)
   window.addEventListener('keydown', onKeyDown)
 }
-
-
-
-
-
 function createSky() {
   // Sun
   const sunGeometry = new THREE.CircleGeometry(10, 32)
