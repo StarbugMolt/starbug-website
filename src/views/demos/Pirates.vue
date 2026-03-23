@@ -45,7 +45,7 @@
   <div class="game-container" ref="container">
     <div class="hud">
       <div class="hud-left">
-        <div class="stat">🏴‍☠️ HP: {{ hp }}/{{ 100 + playerUpgrades.maxHpBonus * 10 }}</div>
+        <div class="stat">🏴‍☠️ HP: {{ hp }}/{{ 100 + playerUpgrades.extraHp * 20 }}</div>
         <div class="stat">💰 Gold: {{ gold }}</div>
         <div class="stat">💨 Wind: {{ windDirection }} {{ windSpeed.toFixed(1) }} kn</div>
         <div class="stat">⚓ Speed: {{ playerSpeed?.toFixed(1) || '0' }} kn</div>
@@ -116,106 +116,161 @@
     <div class="overlay harbour-overlay" v-if="shopOpen">
       <div class="harbour-title">⚓ PORT SHOP ⚓</div>
       <div class="harbour-gold">💰 {{ gold }} Gold</div>
-      <div class="harbour-hp">❤️ HP: {{ hp }}/{{ 100 + playerUpgrades.maxHpBonus * 10 }}</div>
+      <div class="harbour-hp">❤️ HP: {{ hp }}/{{ 100 + playerUpgrades.extraHp * 20 }}</div>
       <div class="shop-upgrades">
         <!-- Faster Sails -->
         <div class="upgrade-card">
           <div class="upgrade-icon">💨</div>
-          <div class="upgrade-name">Faster Sails</div>
-          <div class="upgrade-level">Level {{ playerUpgrades.sailSpeed }}/3</div>
-          <div class="upgrade-bonus">
-            {{ playerUpgrades.sailSpeed === 0 ? '+0 max speed' : `+${playerUpgrades.sailSpeed * 3} max speed` }}
-          </div>
-          <button
-            v-if="playerUpgrades.sailSpeed < 3"
+          <div class="upgrade-name">Sails</div>
+          <div class="upgrade-level">Lvl {{ playerUpgrades.sailSpeed }}/3</div>
+          <div class="upgrade-bonus">+{{ playerUpgrades.sailSpeed * 3 }} speed</div>
+          <button 
+            v-if="playerUpgrades.sailSpeed < 3" 
             class="upgrade-btn"
             @click="buyUpgrade('sailSpeed')"
           >
-            BUY {{ [150, 350, 600][playerUpgrades.sailSpeed] }}g
+            BUY {{ costs.sailSpeed[playerUpgrades.sailSpeed + 1] }}g
           </button>
           <div v-else class="upgrade-max">MAXED</div>
         </div>
 
-        <!-- More Cannons -->
+        <!-- Broadside -->
         <div class="upgrade-card">
           <div class="upgrade-icon">💣</div>
-          <div class="upgrade-name">Broadside Power</div>
-          <div class="upgrade-level">Level {{ playerUpgrades.cannonCount }}/3</div>
-          <div class="upgrade-bonus">
-            {{ playerUpgrades.cannonCount === 0 ? '3 cannons/side' : `${3 + playerUpgrades.cannonCount * 2} cannons/side` }}
-          </div>
-          <button
-            v-if="playerUpgrades.cannonCount < 3"
+          <div class="upgrade-name">Broadside</div>
+          <div class="upgrade-level">Lvl {{ playerUpgrades.cannonCount }}/3</div>
+          <div class="upgrade-bonus">{{ 3 + playerUpgrades.cannonCount * 2 }} cannons</div>
+          <button 
+            v-if="playerUpgrades.cannonCount < 3" 
             class="upgrade-btn"
             @click="buyUpgrade('cannonCount')"
           >
-            BUY {{ [200, 450, 750][playerUpgrades.cannonCount] }}g
+            BUY {{ costs.cannonCount[playerUpgrades.cannonCount + 1] }}g
           </button>
           <div v-else class="upgrade-max">MAXED</div>
         </div>
 
-        <!-- Faster Cannons -->
+        <!-- Cannon Speed -->
         <div class="upgrade-card">
           <div class="upgrade-icon">⚡</div>
-          <div class="upgrade-name">Faster Cannons</div>
-          <div class="upgrade-level">Level {{ playerUpgrades.cannonSpeed }}/3</div>
-          <div class="upgrade-bonus">
-            {{ playerUpgrades.cannonSpeed === 0 ? '1.5s cooldown' : `${(1.5 - playerUpgrades.cannonSpeed * 0.25).toFixed(2)}s cooldown` }}
-          </div>
-          <button
-            v-if="playerUpgrades.cannonSpeed < 3"
+          <div class="upgrade-name">Reload</div>
+          <div class="upgrade-level">Lvl {{ playerUpgrades.cannonSpeed }}/3</div>
+          <div class="upgrade-bonus">{{ (1.5 - playerUpgrades.cannonSpeed * 0.25).toFixed(2) }}s</div>
+          <button 
+            v-if="playerUpgrades.cannonSpeed < 3" 
             class="upgrade-btn"
             @click="buyUpgrade('cannonSpeed')"
           >
-            BUY {{ [175, 400, 700][playerUpgrades.cannonSpeed] }}g
+            BUY {{ costs.cannonSpeed[playerUpgrades.cannonSpeed + 1] }}g
           </button>
           <div v-else class="upgrade-max">MAXED</div>
         </div>
 
-        <!-- Repair Haul -->
-        <div class="upgrade-card repair-card">
+        <!-- Repair -->
+        <div class="upgrade-card">
           <div class="upgrade-icon">🔧</div>
-          <div class="upgrade-name">Repair Haul</div>
-          <div class="upgrade-level">∞ Infinite</div>
-          <div class="upgrade-bonus">Restore 10 HP for {{ 100 + playerUpgrades.repairCount * 10 }}g</div>
-          <button 
-            class="upgrade-btn repair-btn"
-            @click="buyUpgrade('repairHaul')"
-          >
+          <div class="upgrade-name">Repair</div>
+          <div class="upgrade-level">+10 HP</div>
+          <div class="upgrade-bonus">100g + 10/use</div>
+          <button class="upgrade-btn" @click="buyUpgrade('repairHaul')">
             BUY {{ 100 + playerUpgrades.repairCount * 10 }}g
           </button>
+        </div>
+
+        <!-- Hull Plating -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">🛡️</div>
+          <div class="upgrade-name">Hull Plating</div>
+          <div class="upgrade-level">+{{ playerUpgrades.extraHp * 20 }} HP</div>
+          <div class="upgrade-bonus">{{ 100 + playerUpgrades.extraHp * 20 }} max HP</div>
+          <button 
+            v-if="playerUpgrades.extraHp < 5" 
+            class="upgrade-btn"
+            @click="buyUpgrade('extraHp')"
+          >
+            BUY {{ costs.extraHp[playerUpgrades.extraHp + 1] }}g
+          </button>
+          <div v-else class="upgrade-max">MAXED</div>
+        </div>
+
+        <!-- Powder Keg -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">🧨</div>
+          <div class="upgrade-name">Powder Keg</div>
+          <div class="upgrade-level">{{ playerUpgrades.cannonDamage ? '+50% DMG' : 'Not bought' }}</div>
+          <div class="upgrade-bonus">{{ playerUpgrades.cannonDamage ? 'Packed!' : '+50% cannon damage' }}</div>
+          <button 
+            v-if="!playerUpgrades.cannonDamage" 
+            class="upgrade-btn"
+            @click="buyUpgrade('cannonDamage')"
+          >
+            BUY 400g
+          </button>
+          <div v-else class="upgrade-owned">✅ PACKED</div>
+        </div>
+
+        <!-- Rudder -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">⚓</div>
+          <div class="upgrade-name">Rudder</div>
+          <div class="upgrade-level">{{ playerUpgrades.turnSpeed ? 'Level ' + playerUpgrades.turnSpeed + '/2' : 'Not bought' }}</div>
+          <div class="upgrade-bonus">Faster turning</div>
+          <button 
+            v-if="playerUpgrades.turnSpeed < 2" 
+            class="upgrade-btn"
+            @click="buyUpgrade('turnSpeed')"
+          >
+            BUY {{ costs.turnSpeed[playerUpgrades.turnSpeed + 1] }}g
+          </button>
+          <div v-else class="upgrade-max">MAXED</div>
+        </div>
+
+        <!-- Flag -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">🏴</div>
+          <div class="upgrade-name">Flag</div>
+          <div class="upgrade-level">{{ playerUpgrades.flee ? 'Raised!' : 'Not raised' }}</div>
+          <div class="upgrade-bonus">Enemies flee after damage</div>
+          <button 
+            v-if="!playerUpgrades.flee" 
+            class="upgrade-btn"
+            @click="buyUpgrade('flee')"
+          >
+            BUY 150g
+          </button>
+          <div v-else class="upgrade-owned">✅ RAISED</div>
+        </div>
+
+        <!-- Spyglass -->
+        <div class="upgrade-card">
+          <div class="upgrade-icon">🔭</div>
+          <div class="upgrade-name">Spyglass</div>
+          <div class="upgrade-level">{{ playerUpgrades.spyglass ? 'Owned!' : 'Not bought' }}</div>
+          <div class="upgrade-bonus">See enemies further</div>
+          <button 
+            v-if="!playerUpgrades.spyglass" 
+            class="upgrade-btn"
+            @click="buyUpgrade('spyglass')"
+          >
+            BUY 250g
+          </button>
+          <div v-else class="upgrade-owned">✅ SPOTTED</div>
         </div>
 
         <!-- Parrot -->
         <div class="upgrade-card parrot-card">
           <div class="upgrade-icon">🦜</div>
-          <div class="upgrade-name">Ship's Parrot</div>
-          <div class="upgrade-level">{{ playerUpgrades.parrot ? 'ON YOUR MAST!' : 'One-time purchase' }}</div>
-          <div class="upgrade-bonus">250 gold — a loyal companion!</div>
+          <div class="upgrade-name">Parrot 🦜</div>
+          <div class="upgrade-level">{{ playerUpgrades.parrot ? 'On your mast!' : 'Not bought' }}</div>
+          <div class="upgrade-bonus">A loyal companion</div>
           <button 
             v-if="!playerUpgrades.parrot" 
-            class="upgrade-btn parrot-btn"
+            class="upgrade-btn"
             @click="buyUpgrade('parrot')"
           >
             BUY 250g
           </button>
           <div v-else class="upgrade-owned">✅ ABOARD</div>
-        </div>
-
-        <!-- Max HP -->
-        <div class="upgrade-card">
-          <div class="upgrade-icon">❤️</div>
-          <div class="upgrade-name">Max HP</div>
-          <div class="upgrade-level">+{{ playerUpgrades.maxHpBonus * 10 }} / +10 per level</div>
-          <div class="upgrade-bonus">Current max: {{ 100 + playerUpgrades.maxHpBonus * 10 }} HP</div>
-          <button
-            v-if="playerUpgrades.maxHpBonus < 5"
-            class="upgrade-btn"
-            @click="buyUpgrade('maxHpBonus')"
-          >
-            BUY {{ [150, 300, 500, 750, 1000][playerUpgrades.maxHpBonus] }}g
-          </button>
-          <div v-else class="upgrade-max">MAXED (150 HP)</div>
         </div>
       </div>
 
@@ -256,12 +311,16 @@ const enemyIndicators = ref([]) // For directional indicators
 // Harbour / Shop system
 const shopOpen = ref(false)
 const playerUpgrades = ref({
-  sailSpeed: 0,   // +1-3 = faster sails (extra speed bonus)
-  cannonCount: 0, // +1-3 = more cannons per broadside
-  cannonSpeed: 0, // +1-3 = faster reload
-  maxHpBonus: 0,  // +10 max HP per level
-  repairCount: 0, // times repair used (increases cost by 10 each time)
-  parrot: false    // visual parrot on ship mast when purchased
+  sailSpeed: 0,     // +1-3 = faster sails (extra speed bonus)
+  cannonCount: 0,   // +1-3 = more cannons per broadside
+  cannonSpeed: 0,   // +1-3 = faster reload
+  cannonDamage: 0,   // +1-3 = Powder Keg (more cannon damage)
+  turnSpeed: 0,     // +1-3 = Rudder (faster turning)
+  extraHp: 0,        // +1-5 = Hull Plating (+20 HP per level)
+  flee: false,       // Flag (enemy ships flee after taking damage)
+  spyglass: false,   // Spyglass (see enemies further)
+  parrot: false,     // visual parrot on ship mast when purchased
+  repairCount: 0    // times repair used (increases cost by 10 each time)
 })
 const shopMessage = ref('')
 const showShopMessage = (msg) => {
@@ -2241,7 +2300,11 @@ function buyUpgrade(type) {
     sailSpeed: { 1: 150, 2: 350, 3: 600 },
     cannonCount: { 1: 200, 2: 450, 3: 750 },
     cannonSpeed: { 1: 175, 2: 400, 3: 700 },
-    maxHpBonus: { 1: 150, 2: 300, 3: 500, 4: 750, 5: 1000 },
+    cannonDamage: { 1: 400, 2: 800 },
+    turnSpeed: { 1: 300, 2: 600 },
+    extraHp: { 1: 500, 2: 1000, 3: 1500, 4: 2000, 5: 2500 },
+    flee: 150,
+    spyglass: 250,
     parrot: 250
   }
 
