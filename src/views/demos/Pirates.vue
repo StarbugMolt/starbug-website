@@ -249,7 +249,12 @@ const showShopMessage = (msg) => {
   setTimeout(() => { if (shopMessage.value === msg) shopMessage.value = '' }, 2500)
 }
 
-// Memory management
+// Wind particles (GPU Points — single draw call, no per-particle JS objects)
+const MAX_WIND_PARTICLES = 35
+let windParticles
+let windParticlePositions
+let windParticleLifetimes
+let windParticleVels // { angle, speed } stored per particle
 const MAX_TREASURES = 10
 const MAX_CANNONBALLS = 40
 const MAX_WAKE_PARTICLES = 35
@@ -261,6 +266,7 @@ let lastChunkCount = 0
 let spawnCheckFrameCounter = 0
 let fireEffectsFrameCounter = 0
 let indicatorsFrameCounter = 0
+let windParticleFrameCounter = 0
 let lastCleanupTime = 0
 
 // Computed for HUD
@@ -324,7 +330,9 @@ let rocks = []
 let spawnedChunks = new Set() // Track spawned areas "x,z"
 let worldObjects = { islands: [], rocks: [], ships: [] }
 
-// Ocean (waves removed - was too heavy)
+// Ocean (GPU shader - no CPU trig)
+let oceanMesh
+const OCEAN_SEGMENTS = 25 // 25x25 = 625 vertices — GPU handles all animation
 
 const showMessage = (msg, duration = 3000) => {
   message.value = msg
@@ -356,6 +364,119 @@ function disposeGroup(group) {
     if (child.isMesh) disposeMesh(child)
   })
   scene.remove(group)
+}
+
+// ══════════════════════════════════════════════════════════════
+// GPU OCEAN — all animation on GPU, zero CPU trig
+// ══════════════════════════════════════════════════════════════
+const oceanVertexShader = `
+  uniform float uTime;
+  varying vec2 vUv;
+  varying float vElevation;
+  
+  void main() {
+    vUv = uv;
+    vec3 pos = position;
+    float wave1 = sin(pos.x * 0.02 + uTime * 0.5) * cos(pos.y * 0.015 + uTime * 0.4) * 1.5;
+    float wave2 = sin(pos.x * 0.04 + uTime * 0.8) * cos(pos.y * 0.03 + uTime * 0.6) * 0.7;
+    pos.z = wave1 + wave2;
+    vElevation = pos.z;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  }
+`
+const oceanFragmentShader = `
+  uniform float uTime;
+  varying vec2 vUv;
+  varying float vElevation;
+  void main() {
+    float depth = 0.5 + (vElevation + 2.0) * 0.15;
+    vec3 deep = vec3(0.0, 0.25, 0.45);
+    vec3 shallow = vec3(0.0, 0.45, 0.6);
+    vec3 color = mix(deep, shallow, clamp(depth, 0.0, 1.0));
+    float shimmer = max(0.0, vElevation) * 0.1;
+    color += shimmer * vec3(0.5, 0.7, 0.8);
+    gl_FragColor = vec4(color, 0.92);
+  }
+`
+
+function createOcean() {
+  const geometry = new THREE.PlaneGeometry(1500, 1500, OCEAN_SEGMENTS, OCEAN_SEGMENTS)
+  const material = new THREE.ShaderMaterial({
+    vertexShader: oceanVertexShader,
+    fragmentShader: oceanFragmentShader,
+    uniforms: { uTime: { value: 0 } },
+    transparent: true,
+    side: THREE.DoubleSide
+  })
+  oceanMesh = new THREE.Mesh(geometry, material)
+  oceanMesh.rotation.x = -Math.PI / 2
+  oceanMesh.position.y = -0.5
+  scene.add(oceanMesh)
+}
+
+// ══════════════════════════════════════════════════════════════
+// GPU WIND PARTICLES — Points geometry, single draw call
+// ══════════════════════════════════════════════════════════════
+function createWindParticles() {
+  const count = MAX_WIND_PARTICLES
+  windParticlePositions = new Float32Array(count * 3)
+  windParticleLifetimes = new Float32Array(count)
+  windParticleVels = new Float32Array(count)
+  
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2
+    const radius = Math.random() * 35
+    windParticlePositions[i * 3] = Math.cos(angle) * radius
+    windParticlePositions[i * 3 + 1] = 2 + Math.random() * 8
+    windParticlePositions[i * 3 + 2] = Math.sin(angle) * radius
+    windParticleLifetimes[i] = Math.random()
+    windParticleVels[i] = 0.5 + Math.random() * 0.8
+  }
+  
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(windParticlePositions, 3))
+  const material = new THREE.PointsMaterial({
+    color: 0xaaddff,
+    size: 0.35,
+    transparent: true,
+    opacity: 0.45,
+    sizeAttenuation: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  })
+  windParticles = new THREE.Points(geometry, material)
+  windParticles.frustumCulled = false
+  scene.add(windParticles)
+}
+
+function updateWindParticles(dt) {
+  if (!windParticles) return
+  const count = MAX_WIND_PARTICLES
+  const speed = windSpeed.value * 3 + 4
+  
+  for (let i = 0; i < count; i++) {
+    windParticleLifetimes[i] -= dt * 0.4
+    
+    if (windParticleLifetimes[i] <= 0) {
+      const spread = Math.random() * Math.PI * 2
+      const radius = 5 + Math.random() * 30
+      windParticlePositions[i * 3] = Math.cos(spread) * radius
+      windParticlePositions[i * 3 + 1] = 2 + Math.random() * 8
+      windParticlePositions[i * 3 + 2] = Math.sin(spread) * radius
+      windParticleLifetimes[i] = 1.5 + Math.random() * 1.5
+      windParticleVels[i] = 0.5 + Math.random() * 0.8
+    } else {
+      windParticlePositions[i * 3] += Math.sin(windAngle) * speed * windParticleVels[i] * dt
+      windParticlePositions[i * 3 + 2] += Math.cos(windAngle) * speed * windParticleVels[i] * dt
+    }
+    
+    // Keep near player
+    const px = windParticlePositions[i * 3] - playerPos.value.x
+    const pz = windParticlePositions[i * 3 + 2] - playerPos.value.z
+    if (px * px + pz * pz > 50 * 50) windParticleLifetimes[i] = 0
+  }
+  
+  windParticles.geometry.attributes.position.needsUpdate = true
 }
 
 // Queue something for gradual disposal (avoids synchronous spikes)
@@ -404,6 +525,12 @@ function init() {
 
   // Sky
   createSky()
+  
+  // GPU ocean (waves animated entirely on GPU)
+  createOcean()
+  
+  // GPU wind particles (Points geometry, single draw call)
+  createWindParticles()
 
   // Player ship
   createPlayerShip()
@@ -3141,6 +3268,18 @@ function update(dt) {
   }
   updateWakeParticles(dt)
 
+  // Update wind particles (every 5 frames — cheap position math only)
+  windParticleFrameCounter++
+  if (windParticleFrameCounter >= 5) {
+    windParticleFrameCounter = 0
+    updateWindParticles(dt)
+  }
+  
+  // Update GPU ocean shader time uniform
+  if (oceanMesh) {
+    oceanMesh.material.uniforms.uTime.value = Date.now() * 0.001
+  }
+
   // Update fire effects on damaged ships (every 5 frames)
   fireEffectsFrameCounter++
   if (fireEffectsFrameCounter >= 5) {
@@ -3306,9 +3445,16 @@ function startGame() {
   playerUpgrades.value = { sailSpeed: 0, cannonCount: 0, cannonSpeed: 0, maxHpBonus: 0, repairCount: 0 }
   lastChunkCount = 0
   disposeQueue = [] // Clear pending disposals
+  windParticleFrameCounter = 0
+  // Dispose wind particles
+  if (windParticles) {
+    disposeMesh(windParticles)
+    windParticles = null
+  }
   spawnCheckFrameCounter = 0
   fireEffectsFrameCounter = 0
   indicatorsFrameCounter = 0
+  windParticleFrameCounter = 0
   lastCleanupTime = 0
 
   // Clear fire effects
