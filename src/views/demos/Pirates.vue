@@ -407,6 +407,7 @@ const oceanFragmentShader = `
 `
 
 function createOcean() {
+  console.log('[createOcean] scene=', !!scene, 'oceanVertexShader=', !!oceanVertexShader)
   const geometry = new THREE.PlaneGeometry(1500, 1500, OCEAN_SEGMENTS, OCEAN_SEGMENTS)
   const material = new THREE.ShaderMaterial({
     vertexShader: oceanVertexShader,
@@ -576,6 +577,7 @@ function init() {
   console.log('[init] ocean ok')
 
   // GPU wind particles
+  console.log('[init] wind particles about to init...')
   createWindParticles()
   console.log('[init] wind ok')
 
