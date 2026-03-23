@@ -3461,6 +3461,12 @@ function animate() {
 
   const dt = 1 / 60
   frameCount++
+  
+  // Debug: log every 60 frames (once per second)
+  if (frameCount % 60 === 0) {
+    console.log(`[ANIMATE] frame=${frameCount} gameState=${gameState.value} scene=${!!scene} renderer=${!!renderer}`)
+  }
+  
   update(dt)
 
   renderer.render(scene, camera)
