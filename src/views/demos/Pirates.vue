@@ -439,16 +439,17 @@ function createWindParticles() {
   geometry.setAttribute('position', new THREE.BufferAttribute(windParticlePositions, 3))
   const material = new THREE.PointsMaterial({
     color: 0xffffff,
-    size: 1.2,
+    size: 2.5,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.8,
     sizeAttenuation: true,
     blending: THREE.AdditiveBlending,
-    depthWrite: false
+    depthWrite: false,
+    fog: false
   })
   windParticles = new THREE.Points(geometry, material)
   windParticles.frustumCulled = false
-  windParticles.material.fog = false // Wind particles ignore scene fog - always visible
+  windParticles.renderOrder = 999 // Always on top
   scene.add(windParticles)
 }
 
@@ -506,8 +507,8 @@ function init() {
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
-  // Darker fog so ocean contrasts with sky at distance
-  scene.fog = new THREE.Fog(0x5599bb, 80, 350)
+  // Soft fog: near=0 so no hard edge, far=400 for gentle fade
+  scene.fog = new THREE.Fog(0x5599bb, 0, 400)
 
   // Camera
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
@@ -1423,8 +1424,8 @@ function spawnChunk(cx, cz) {
     }
   }
 
-  // 15% chance for sunken ship with treasure
-  if (!isStartingChunk && Math.random() < 0.15) {
+  // 5% chance for sunken ship with treasure (was 15% — too spammy with large chunk radius)
+  if (!isStartingChunk && Math.random() < 0.05) {
     let sx, sz, validPos
     let attempts = 0
 
@@ -1467,6 +1468,15 @@ function spawnChunk(cx, cz) {
             validPos = false
             break
           }
+        }
+      }
+
+      // Must be at least 30 units from player
+      if (validPos) {
+        const dx = sx - playerPos.value.x
+        const dz = sz - playerPos.value.z
+        if (Math.sqrt(dx * dx + dz * dz) < 30) {
+          validPos = false
         }
       }
 
