@@ -407,43 +407,19 @@ const oceanFragmentShader = `
 `
 
 function createOcean() {
-  console.log('[createOcean] scene=', !!scene, 'oceanMesh before=', !!oceanMesh)
+  // GPU shader — waves animate entirely on GPU, zero CPU trig per frame
   const geometry = new THREE.PlaneGeometry(1500, 1500, OCEAN_SEGMENTS, OCEAN_SEGMENTS)
-  // TEST: use basic material first to verify scene.add works
-  const material = new THREE.MeshBasicMaterial({ color: 0x0055aa, side: THREE.DoubleSide })
+  const material = new THREE.ShaderMaterial({
+    vertexShader: oceanVertexShader,
+    fragmentShader: oceanFragmentShader,
+    uniforms: { uTime: { value: 0 } },
+    transparent: false,
+    side: THREE.DoubleSide
+  })
   oceanMesh = new THREE.Mesh(geometry, material)
-  console.log('[createOcean] oceanMesh created=', !!oceanMesh)
   oceanMesh.rotation.x = -Math.PI / 2
   oceanMesh.position.y = -0.5
-  oceanMesh.renderOrder = 0
-  console.log('[createOcean] about to scene.add, scene=', typeof scene)
   scene.add(oceanMesh)
-  console.log('[createOcean] ocean added!')
-  
-  // Debug: add a solid cyan plane at y=0 (above ocean at y=-0.5) to verify depth ordering
-  const debugGeom = new THREE.PlaneGeometry(500, 500)
-  const debugMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide })
-  const debugPlane = new THREE.Mesh(debugGeom, debugMat)
-  debugPlane.rotation.x = -Math.PI / 2
-  debugPlane.position.y = 0 // ABOVE ocean (ocean is at -0.5)
-  debugPlane.renderOrder = -1
-  console.log('[createOcean] debug plane ok')
-  scene.add(debugPlane)
-  console.log('[createOcean] debug plane added')
-  
-  // Debug: wind arrow — bright cone pointing in wind direction, always in front of camera
-  const windArrowGeom = new THREE.ConeGeometry(1.5, 8, 8)
-  const windArrowMat = new THREE.MeshBasicMaterial({ color: 0xff8800 })
-  const windArrow = new THREE.Mesh(windArrowGeom, windArrowMat)
-  windArrow.position.set(0, 25, 40) // Fixed position in front of ship
-  windArrow.name = 'windArrow'
-  console.log('[createOcean] wind arrow ok')
-  scene.add(windArrow)
-  debugWindArrow = windArrow
-  console.log('[createOcean] wind arrow added')
-  
-  console.log('[createOcean] ring skipped (playerShip not ready)')
-  console.log('[createOcean] all done')
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -534,7 +510,6 @@ function processDisposalQueue() {
 }
 
 function init() {
-  console.log('[init] starting...')
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
@@ -547,13 +522,13 @@ function init() {
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
   camera.position.set(0, 30, -40)
   camera.lookAt(0, 0, 0)
-  console.log('[init] camera ok')
+
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true })
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  console.log('[init] renderer ok')
+
 
   // Lights
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
@@ -561,32 +536,24 @@ function init() {
   const sunLight = new THREE.DirectionalLight(0xffffcc, 1)
   sunLight.position.set(50, 100, 50)
   scene.add(sunLight)
-  console.log('[init] lights ok')
+
 
   // Sky
   createSky()
-  console.log('[init] sky ok')
+
 
   // GPU ocean
   createOcean()
-  console.log('[init] ocean ok')
+
 
   // GPU wind particles
-  console.log('[init] wind particles about to init...')
-  try {
-    createWindParticles()
-  } catch(e) {
-    console.error('[init] wind particles FAILED:', e.message)
-  }
-  console.log('[init] wind ok')
+  createWindParticles()
 
   // Player ship
   createPlayerShip()
-  console.log('[init] player ok')
 
   // Initial enemy
   spawnEnemyShip()
-  console.log('[init] all done!')
 
   // Events
   window.addEventListener('resize', onResize)
@@ -3468,22 +3435,13 @@ function updateWakeParticles(dt) {
 
 function animate() {
   animationId = requestAnimationFrame(animate)
-
   const dt = 1 / 60
   frameCount++
-  
-  // Debug: log every 60 frames (once per second)
-  if (frameCount % 60 === 0) {
-    console.log(`[ANIMATE] frame=${frameCount} gameState=${gameState.value} scene=${!!scene} renderer=${!!renderer}`)
-  }
-  
   update(dt)
-
   renderer.render(scene, camera)
 }
 
 function startGame() {
-  console.log('[Pirates] startGame called - canvas:', !!canvas.value)
   // Exit pointer lock if active
   if (document.pointerLockElement) {
     document.exitPointerLock()
@@ -3586,9 +3544,7 @@ function startGame() {
 
 onMounted(() => {
   try {
-    console.log('[Pirates] onMounted firing...')
     init()
-    console.log('[Pirates] init complete, starting animate')
     animate()
   } catch (e) {
     console.error('[Pirates] startup error:', e)
