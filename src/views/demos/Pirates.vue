@@ -98,7 +98,7 @@
         <p>🪨 <strong>Avoid</strong> - Islands, rocks, and the Kraken</p>
         <p>⚔️ <strong>Defeat</strong> - The enemy ship, then face the Kraken</p>
       </div>
-      <button @click="window.__piratesDebug='button_clicked'; console.log('[Pirates] START button clicked!'); startGame()">⚔️ SET SALE!</button>
+      <button @click="startGame">⚔️ SET SALE!</button>
     </div>
 
     <div class="overlay" v-if="gameState === 'gameover'">
@@ -3473,9 +3473,7 @@ function animate() {
 }
 
 function startGame() {
-  window.__piratesDebug = 'startgame_running'
-  console.log('[Pirates] startGame called - canvas:', canvas.value)
-  alert('[Pirates] startGame fired! canvas=' + !!canvas.value)
+  console.log('[Pirates] startGame called - canvas:', !!canvas.value)
   // Exit pointer lock if active
   if (document.pointerLockElement) {
     document.exitPointerLock()
