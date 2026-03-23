@@ -3537,6 +3537,7 @@ function startGame() {
 onMounted(() => {
   try {
     init()
+    createWindParticles() // Create ONCE — don't recreate on game restart
     animate()
   } catch (e) {
     console.error('[Pirates] startup error:', e)
