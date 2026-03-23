@@ -421,21 +421,31 @@ function createOcean() {
   oceanMesh.renderOrder = 0
   scene.add(oceanMesh)
   
-  // Debug: add a solid green plane beneath it to verify the mesh IS rendering
+  // Debug: add a solid cyan plane at y=0 (above ocean at y=-0.5) to verify depth ordering
   const debugGeom = new THREE.PlaneGeometry(500, 500)
-  const debugMat = new THREE.MeshBasicMaterial({ color: 0x00ff44, side: THREE.DoubleSide })
+  const debugMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide })
   const debugPlane = new THREE.Mesh(debugGeom, debugMat)
   debugPlane.rotation.x = -Math.PI / 2
-  debugPlane.position.y = -1.5
+  debugPlane.position.y = 0 // ABOVE ocean (ocean is at -0.5)
   debugPlane.renderOrder = -1
   scene.add(debugPlane)
   
-  // Debug: a bright red sphere above the ocean so we can see if ANY 3D renders
-  const debugSphereGeom = new THREE.SphereGeometry(5, 8, 8)
-  const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0066 })
-  const debugSphere = new THREE.Mesh(debugSphereGeom, debugSphereMat)
-  debugSphere.position.set(0, 15, 50) // In front of camera at start
-  scene.add(debugSphere)
+  // Debug: wind arrow — bright cone pointing in wind direction, always in front of camera
+  const windArrowGeom = new THREE.ConeGeometry(1.5, 8, 8)
+  const windArrowMat = new THREE.MeshBasicMaterial({ color: 0xff8800 })
+  const windArrow = new THREE.Mesh(windArrowGeom, windArrowMat)
+  windArrow.position.set(0, 25, 40) // Fixed position in front of ship
+  windArrow.userData.isWindArrow = true
+  scene.add(windArrow)
+  
+  // Debug: horizontal ring around ship to show wind direction at ship level
+  const windRingGeom = new THREE.TorusGeometry(8, 0.3, 8, 32)
+  const windRingMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 })
+  const windRing = new THREE.Mesh(windRingGeom, windRingMat)
+  windRing.rotation.x = -Math.PI / 2
+  windRing.position.y = 1
+  windRing.userData.isWindRing = true
+  playerShip.add(windRing)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3318,6 +3328,13 @@ function update(dt) {
   if (oceanMesh) {
     oceanMesh.material.uniforms.uTime.value = Date.now() * 0.001
   }
+  
+  // Debug wind indicators — update direction every frame
+  scene.traverse(obj => {
+    if (obj.userData.isWindArrow) {
+      obj.rotation.y = windAngle
+    }
+  })
 
   // Update fire effects on damaged ships (every 5 frames)
   fireEffectsFrameCounter++
