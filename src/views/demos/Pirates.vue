@@ -541,8 +541,10 @@ function init() {
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
-  // Fog matches sky at horizon — ocean color must differ to be visible
-  scene.fog = new THREE.FogExp2(0x87CEEB, 0.004)
+  // Fog DISABLED — was density=0.004 which fogged everything invisible at 50 units
+  // Ships at 50 units from camera were 82% fogged into sky color
+  // Re-enable later with density=0.001 once scene renders correctly
+  scene.fog = null
 
   // Camera
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
