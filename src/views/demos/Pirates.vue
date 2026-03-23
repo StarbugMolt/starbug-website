@@ -538,6 +538,7 @@ function processDisposalQueue() {
 }
 
 function init() {
+  console.log('[init] starting...')
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
@@ -550,9 +551,39 @@ function init() {
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
   camera.position.set(0, 30, -40)
   camera.lookAt(0, 0, 0)
+  console.log('[init] camera ok')
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true })
+  console.log('[init] renderer ok')
+
+  // Lights
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
+  scene.add(ambientLight)
+  const sunLight = new THREE.DirectionalLight(0xffffcc, 1)
+  sunLight.position.set(50, 100, 50)
+  scene.add(sunLight)
+  console.log('[init] lights ok')
+
+  // Sky
+  createSky()
+  console.log('[init] sky ok')
+
+  // GPU ocean
+  createOcean()
+  console.log('[init] ocean ok')
+
+  // GPU wind particles
+  createWindParticles()
+  console.log('[init] wind ok')
+
+  // Player ship
+  createPlayerShip()
+  console.log('[init] player ok')
+
+  // Initial enemy
+  spawnEnemyShip()
+  console.log('[init] all done!')
   renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 
