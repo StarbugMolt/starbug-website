@@ -555,6 +555,8 @@ function init() {
 
   // Renderer
   renderer = new THREE.WebGLRenderer({ canvas: canvas.value, antialias: true })
+  renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   console.log('[init] renderer ok')
 
   // Lights
