@@ -377,9 +377,11 @@ const oceanVertexShader = `
   void main() {
     vUv = uv;
     vec3 pos = position;
-    float wave1 = sin(pos.x * 0.015 + uTime * 0.4) * cos(pos.y * 0.01 + uTime * 0.3) * 3.0;
-    float wave2 = sin(pos.x * 0.03 + uTime * 0.7) * cos(pos.y * 0.02 + uTime * 0.5) * 1.5;
-    pos.z = wave1 + wave2;
+    // Strong wave displacement so it's clearly visible
+    float wave1 = sin(pos.x * 0.01 + uTime * 0.5) * cos(pos.y * 0.008 + uTime * 0.4) * 6.0;
+    float wave2 = sin(pos.x * 0.02 + uTime * 0.8) * cos(pos.y * 0.015 + uTime * 0.6) * 3.0;
+    float wave3 = sin((pos.x + pos.y) * 0.005 + uTime * 0.3) * 4.0;
+    pos.z = wave1 + wave2 + wave3;
     vElevation = pos.z;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
   }
@@ -389,15 +391,17 @@ const oceanFragmentShader = `
   varying vec2 vUv;
   varying float vElevation;
   void main() {
-    float t = 0.5 + (vElevation + 4.0) * 0.1;
-    vec3 deep = vec3(0.0, 0.18, 0.38);
-    vec3 mid = vec3(0.05, 0.35, 0.55);
-    vec3 shallow = vec3(0.1, 0.55, 0.65);
-    vec3 color = mix(deep, mid, clamp(t * 0.5, 0.0, 0.5));
-    color = mix(color, shallow, clamp((t - 0.5) * 2.0, 0.0, 1.0));
-    float shimmer = abs(sin(vElevation * 2.0 + uTime * 3.0)) * 0.12;
-    color += shimmer * vec3(0.6, 0.8, 0.9);
-    gl_FragColor = vec4(color, 0.95);
+    // High contrast: deep blue troughs, bright blue-green peaks
+    vec3 deep = vec3(0.02, 0.12, 0.35);
+    vec3 mid = vec3(0.0, 0.35, 0.55);
+    vec3 crest = vec3(0.15, 0.65, 0.75);
+    float t = clamp((vElevation + 10.0) / 20.0, 0.0, 1.0);
+    vec3 color = mix(deep, mid, smoothstep(0.0, 0.5, t));
+    color = mix(color, crest, smoothstep(0.5, 1.0, t));
+    // Bright shimmer on crests
+    float shimmer = pow(max(0.0, vElevation / 10.0), 2.0) * 0.3;
+    color += shimmer * vec3(0.5, 0.8, 0.9);
+    gl_FragColor = vec4(color, 1.0);
   }
 `
 
@@ -408,7 +412,8 @@ function createOcean() {
     fragmentShader: oceanFragmentShader,
     uniforms: { uTime: { value: 0 } },
     transparent: true,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    fog: false
   })
   oceanMesh = new THREE.Mesh(geometry, material)
   oceanMesh.rotation.x = -Math.PI / 2
@@ -507,8 +512,8 @@ function init() {
   // Scene
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x87CEEB)
-  // Soft fog: near=0 so no hard edge, far=400 for gentle fade
-  scene.fog = new THREE.Fog(0x5599bb, 0, 400)
+  // Fog matches sky at horizon — ocean color must differ to be visible
+  scene.fog = new THREE.FogExp2(0x87CEEB, 0.004)
 
   // Camera
   camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000)
@@ -1232,9 +1237,8 @@ function checkProceduralSpawns() {
   const px = Math.floor(playerPos.value.x / CHUNK_SIZE)
   const pz = Math.floor(playerPos.value.z / CHUNK_SIZE)
 
-  // Only check immediate chunks (3x3) on first spawn to avoid massive initial load
-  // Expand to 9x9 over time
-  const chunkRadius = spawnedChunks.size < 10 ? 1 : (spawnedChunks.size < 30 ? 2 : 4)
+  // Expand chunks gradually — cap at 5x5 (radius 2) to avoid lag spikes
+  const chunkRadius = spawnedChunks.size < 10 ? 1 : 2
 
   // Check chunk grid around player
   for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
