@@ -3473,6 +3473,7 @@ function animate() {
 }
 
 function startGame() {
+  console.log('[Pirates] startGame called')
   // Exit pointer lock if active
   if (document.pointerLockElement) {
     document.exitPointerLock()
