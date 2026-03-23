@@ -372,38 +372,62 @@ function disposeGroup(group) {
 // ══════════════════════════════════════════════════════════════
 // GPU OCEAN — all animation on GPU, zero CPU trig
 // ══════════════════════════════════════════════════════════════
-const oceanVertexShader = `
-  uniform float uTime;
-  varying vec2 vUv;
-  varying float vElevation;
-  
-  void main() {
-    vUv = uv;
-    vec3 pos = position;
-    float wave1 = sin(pos.x * 0.01 + uTime * 0.5) * cos(pos.y * 0.008 + uTime * 0.4) * 6.0;
-    float wave2 = sin(pos.x * 0.02 + uTime * 0.8) * cos(pos.y * 0.015 + uTime * 0.6) * 3.0;
-    float wave3 = sin((pos.x + pos.y) * 0.005 + uTime * 0.3) * 4.0;
-    pos.z = wave1 + wave2 + wave3;
-    vElevation = pos.z;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+// Ocean — chunked tiles (Stone's approach: 9 tiles of 200x200, 15x15 segments each)
+const OCEAN_PLANE_CHUNK_SIZE = 200
+const OCEAN_PLANE_SEGMENTS = 15
+const oceanChunks = []
+
+function createOcean() {
+  const size = OCEAN_PLANE_CHUNK_SIZE
+  const segs = OCEAN_PLANE_SEGMENTS
+  const geometry = new THREE.PlaneGeometry(size, size, segs, segs)
+  const material = new THREE.MeshPhongMaterial({
+    color: 0x004466,
+    emissive: 0x001122,
+    shininess: 80,
+    specular: 0x335577,
+    side: THREE.DoubleSide
+  })
+  // 3x3 grid of chunks around player
+  for (let cx = -1; cx <= 1; cx++) {
+    for (let cz = -1; cz <= 1; cz++) {
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.rotation.x = -Math.PI / 2
+      mesh.position.set(cx * size, 0, cz * size)
+      scene.add(mesh)
+      oceanChunks.push(mesh)
+    }
   }
-`
-const oceanFragmentShader = `
-  uniform float uTime;
-  varying vec2 vUv;
-  varying float vElevation;
-  void main() {
-    vec3 deep = vec3(0.02, 0.12, 0.35);
-    vec3 mid = vec3(0.0, 0.35, 0.55);
-    vec3 crest = vec3(0.15, 0.65, 0.75);
-    float t = clamp((vElevation + 10.0) / 20.0, 0.0, 1.0);
-    vec3 color = mix(deep, mid, smoothstep(0.0, 0.5, t));
-    color = mix(color, crest, smoothstep(0.5, 1.0, t));
-    float shimmer = pow(max(0.0, vElevation / 10.0), 2.0) * 0.3;
-    color += shimmer * vec3(0.5, 0.8, 0.9);
-    gl_FragColor = vec4(color, 1.0);
+}
+
+// Keep ocean chunks centred on player (no need to recreate, just reposition)
+function updateOceanChunks() {
+  const size = OCEAN_PLANE_CHUNK_SIZE
+  const half = size
+  for (let i = 0; i < oceanChunks.length; i++) {
+    const chunk = oceanChunks[i]
+    const ox = Math.round((playerPos.value.x + (i % 3 - 1) * half) / size) * size + (i % 3 - 1) * size
+    const oz = Math.round((playerPos.value.z + (Math.floor(i / 3) - 1) * half) / size) * size + (Math.floor(i / 3) - 1) * size
+    chunk.position.x = ox
+    chunk.position.z = oz
   }
-`
+}
+
+// Animate ocean vertices — CPU-side but limited to 9 chunks of 15x15 = 2025 vertices
+function animateWaves(time) {
+  for (const chunk of oceanChunks) {
+    const pos = chunk.geometry.attributes.position
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const y = pos.getY(i)
+      const wave1 = Math.sin(x * 0.05 + time) * Math.cos(y * 0.05 + time * 0.8) * 2
+      const wave2 = Math.sin(x * 0.1 + time * 1.5) * Math.cos(y * 0.08 + time) * 1
+      const wave3 = Math.sin((x + y) * 0.03 + time * 0.5) * 1.5
+      pos.setZ(i, wave1 + wave2 + wave3)
+    }
+    pos.needsUpdate = true
+  }
+}
 
 function createOcean() {
   // GPU shader — waves animate entirely on GPU, zero CPU trig per frame
