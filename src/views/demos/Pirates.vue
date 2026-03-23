@@ -3574,8 +3574,14 @@ function startGame() {
 }
 
 onMounted(() => {
-  init()
-  animate()
+  try {
+    console.log('[Pirates] onMounted firing...')
+    init()
+    console.log('[Pirates] init complete, starting animate')
+    animate()
+  } catch (e) {
+    console.error('[Pirates] startup error:', e)
+  }
 })
 
 onUnmounted(() => {
