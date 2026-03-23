@@ -1167,7 +1167,7 @@ function createKraken() {
 }
 
 // Treasure functions
-function spawnTreasure(x, z, baseGold = 50) {
+function spawnTreasure(x, z, baseGold = 50, showMsg = true) {
   // Hard cap on treasures - remove oldest if at limit
   if (treasures.value.length >= MAX_TREASURES) {
     const old = treasures.value.shift()
@@ -1212,7 +1212,9 @@ function spawnTreasure(x, z, baseGold = 50) {
 
   treasures.value.push(treasureEntity)
 
-  showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
+  if (showMsg) {
+    showMessage('💰 Treasure spawned! Drop anchor to collect!', 3000)
+  }
 }
 
 function spawnEnemyTreasure(enemy) {
@@ -1424,8 +1426,9 @@ function spawnChunk(cx, cz) {
     }
   }
 
-  // 5% chance for sunken ship with treasure (was 15% — too spammy with large chunk radius)
-  if (!isStartingChunk && Math.random() < 0.05) {
+  // Deterministic: ~5% of chunks get a sunken ship, based on chunk coords
+  // Same chunks always have sunken ships — no random spam
+  if (!isStartingChunk && (cx * 31 + cz * 17) % 100 < 5) {
     let sx, sz, validPos
     let attempts = 0
 
@@ -1589,8 +1592,8 @@ function spawnSunkenShip(x, z) {
   shipwreckGroup.position.set(x, 0, z)
   scene.add(shipwreckGroup)
 
-  // Spawn treasure at the wreck location
-  spawnTreasure(x, z)
+  // Spawn treasure at the wreck location (no message for sunken ships)
+  spawnTreasure(x, z, 75, false)
 
   // Track for cleanup
   worldObjects.ships = worldObjects.ships || []
