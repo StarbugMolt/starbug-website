@@ -427,7 +427,9 @@ function createOcean() {
   debugPlane.rotation.x = -Math.PI / 2
   debugPlane.position.y = 0 // ABOVE ocean (ocean is at -0.5)
   debugPlane.renderOrder = -1
+  console.log('[createOcean] debug plane ok')
   scene.add(debugPlane)
+  console.log('[createOcean] debug plane added')
   
   // Debug: wind arrow — bright cone pointing in wind direction, always in front of camera
   const windArrowGeom = new THREE.ConeGeometry(1.5, 8, 8)
@@ -435,8 +437,10 @@ function createOcean() {
   const windArrow = new THREE.Mesh(windArrowGeom, windArrowMat)
   windArrow.position.set(0, 25, 40) // Fixed position in front of ship
   windArrow.name = 'windArrow'
+  console.log('[createOcean] wind arrow ok')
   scene.add(windArrow)
   debugWindArrow = windArrow
+  console.log('[createOcean] wind arrow added')
   
   // Debug: horizontal ring around ship to show wind direction at ship level
   const windRingGeom = new THREE.TorusGeometry(8, 0.3, 8, 32)
@@ -445,7 +449,9 @@ function createOcean() {
   windRing.rotation.x = -Math.PI / 2
   windRing.position.y = 1
   windRing.userData.isWindRing = true
+  console.log('[createOcean] ring ok, playerShip=', !!playerShip)
   playerShip.add(windRing)
+  console.log('[createOcean] all done')
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -575,7 +581,11 @@ function init() {
 
   // GPU wind particles
   console.log('[init] wind particles about to init...')
-  createWindParticles()
+  try {
+    createWindParticles()
+  } catch(e) {
+    console.error('[init] wind particles FAILED:', e.message)
+  }
   console.log('[init] wind ok')
 
   // Player ship
