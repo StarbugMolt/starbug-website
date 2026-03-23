@@ -418,7 +418,24 @@ function createOcean() {
   oceanMesh = new THREE.Mesh(geometry, material)
   oceanMesh.rotation.x = -Math.PI / 2
   oceanMesh.position.y = -0.5
+  oceanMesh.renderOrder = 0
   scene.add(oceanMesh)
+  
+  // Debug: add a solid green plane beneath it to verify the mesh IS rendering
+  const debugGeom = new THREE.PlaneGeometry(500, 500)
+  const debugMat = new THREE.MeshBasicMaterial({ color: 0x00ff44, side: THREE.DoubleSide })
+  const debugPlane = new THREE.Mesh(debugGeom, debugMat)
+  debugPlane.rotation.x = -Math.PI / 2
+  debugPlane.position.y = -1.5
+  debugPlane.renderOrder = -1
+  scene.add(debugPlane)
+  
+  // Debug: a bright red sphere above the ocean so we can see if ANY 3D renders
+  const debugSphereGeom = new THREE.SphereGeometry(5, 8, 8)
+  const debugSphereMat = new THREE.MeshBasicMaterial({ color: 0xff0066 })
+  const debugSphere = new THREE.Mesh(debugSphereGeom, debugSphereMat)
+  debugSphere.position.set(0, 15, 50) // In front of camera at start
+  scene.add(debugSphere)
 }
 
 // ══════════════════════════════════════════════════════════════
