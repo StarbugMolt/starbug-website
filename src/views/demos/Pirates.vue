@@ -252,6 +252,7 @@ const showShopMessage = (msg) => {
 // Wind particles (GPU Points — single draw call, no per-particle JS objects)
 const MAX_WIND_PARTICLES = 35
 let windParticles
+let debugWindArrow
 let windParticlePositions
 let windParticleLifetimes
 let windParticleVels // { angle, speed } stored per particle
@@ -435,8 +436,9 @@ function createOcean() {
   const windArrowMat = new THREE.MeshBasicMaterial({ color: 0xff8800 })
   const windArrow = new THREE.Mesh(windArrowGeom, windArrowMat)
   windArrow.position.set(0, 25, 40) // Fixed position in front of ship
-  windArrow.userData.isWindArrow = true
+  windArrow.name = 'windArrow'
   scene.add(windArrow)
+  debugWindArrow = windArrow
   
   // Debug: horizontal ring around ship to show wind direction at ship level
   const windRingGeom = new THREE.TorusGeometry(8, 0.3, 8, 32)
@@ -3330,11 +3332,9 @@ function update(dt) {
   }
   
   // Debug wind indicators — update direction every frame
-  scene.traverse(obj => {
-    if (obj.userData.isWindArrow) {
-      obj.rotation.y = windAngle
-    }
-  })
+  if (debugWindArrow) {
+    debugWindArrow.rotation.y = windAngle
+  }
 
   // Update fire effects on damaged ships (every 5 frames)
   fireEffectsFrameCounter++
